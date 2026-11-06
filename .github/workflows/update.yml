@@ -1,0 +1,38 @@
+name: update-data
+
+# 台股交易日：週一～週五
+# 09:05 台北 = 01:05 UTC；13:45 台北 = 05:45 UTC
+on:
+  schedule:
+    - cron: '5 1 * * 1-5'
+    - cron: '45 5 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch market data
+        run: python update.py data.json
+      - name: Commit if changed
+        run: |
+          git config user.name "stock-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data.json
+          if git diff --staged --quiet; then
+            echo "no change"
+          else
+            git commit -m "data: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi

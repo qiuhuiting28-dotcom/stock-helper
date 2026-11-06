@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#23415e">
+<title>台股看盤小幫手</title>
+<style>
+  :root{
+    --ink:#1a1a1a;
+    --ink-soft:#565d66;
+    --muted:#8a8f96;
+    --bg:#f7f5f0;
+    --card:#ffffff;
+    --line:#e5e0d8;
+    --up:#d2302f;          /* 台灣慣例：紅＝漲 */
+    --down:#1d7a3e;        /* 綠＝跌 */
+    --up-bg:#fbeaea;
+    --down-bg:#e9f4ec;
+    --navy:#23415e;
+    --gold:#b07a2c;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html{font-size:19px; scroll-behavior:smooth}
+  html.fs-big{font-size:23px}
+  html.fs-bigger{font-size:27px}
+  body{
+    margin:0;
+    font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC","Heiti TC",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    padding:0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  }
+  .wrap{max-width:900px; margin:0 auto; padding:20px 16px 56px}
+  @media(min-width:1100px){ .wrap{max-width:1000px} }
+
+  header{display:flex; flex-wrap:wrap; align-items:center; gap:10px; justify-content:space-between; margin-bottom:16px}
+  .brand{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+  .brand h1{font-size:1.3rem; margin:0; color:var(--navy); letter-spacing:.02em}
+  .brand .sub{font-size:.78rem; color:var(--muted)}
+  .badge{font-size:.68rem; color:var(--gold); border:1px solid var(--gold); border-radius:999px; padding:2px 9px; white-space:nowrap}
+  .fsbtns{display:flex; gap:6px}
+  .fsbtns button{
+    font-size:.8rem; padding:7px 13px; border-radius:9px; cursor:pointer;
+    border:1px solid var(--line); background:#fff; color:var(--ink-soft);
+  }
+  .fsbtns button.on{background:var(--navy); color:#fff; border-color:var(--navy)}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; margin-bottom:16px}
+  h2.sec{font-size:.85rem; color:var(--navy); margin:0 0 4px; letter-spacing:.05em; font-weight:700}
+  .sec-desc{font-size:.78rem; color:var(--muted); margin:0 0 12px}
+
+  .idx{display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px}
+  .idx .big{font-size:clamp(1.9rem,7vw,2.6rem); font-weight:800; line-height:1.1; letter-spacing:-.01em}
+  .idx .chg{font-size:1.1rem; font-weight:700; padding:2px 10px; border-radius:8px; white-space:nowrap}
+  .idx .meta{font-size:.8rem; color:var(--ink-soft)}
+  .up{color:var(--up)} .down{color:var(--down)}
+  .up-bg{background:var(--up-bg)} .down-bg{background:var(--down-bg)}
+
+  .summary{background:#fdf8ee; border:1px solid #ead9b8; border-radius:var(--radius); padding:14px 18px; font-size:.95rem; margin-bottom:16px}
+  .summary b{color:var(--navy)}
+
+  .watch-head{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:6px}
+  .addBtn{
+    font-size:.82rem; font-weight:700; color:#fff; background:var(--navy);
+    border:none; border-radius:10px; padding:9px 15px; cursor:pointer;
+  }
+  .addBtn.on{background:var(--muted)}
+
+  .add-panel{margin:10px 0 14px; padding:14px; background:#faf9f6; border:1px solid var(--line); border-radius:12px}
+  #search{
+    width:100%; font-size:1rem; padding:13px 15px; border:1px solid var(--line);
+    border-radius:11px; margin-bottom:10px; background:#fff; color:var(--ink);
+    font-family:inherit;
+  }
+  #search:focus{outline:2px solid var(--navy); outline-offset:1px; border-color:var(--navy)}
+  .add-list{max-height:360px; overflow-y:auto; -webkit-overflow-scrolling:touch}
+  .add-item{
+    display:flex; align-items:center; gap:10px; padding:13px 8px;
+    border-bottom:1px dashed var(--line); cursor:pointer; font-size:.92rem;
+  }
+  .add-item:hover,.add-item:active{background:#fff}
+  .add-item .nm{font-weight:700}
+  .add-item .code{color:var(--muted); font-size:.76rem}
+  .add-item .px{margin-left:auto; color:var(--ink-soft); font-size:.82rem}
+  .add-item .plus{color:var(--up); font-weight:800; font-size:1.15rem; margin-left:6px}
+  .add-empty{padding:16px 8px; color:var(--muted); font-size:.85rem}
+
+  .stock{border-bottom:1px solid var(--line); padding:14px 0}
+  .stock:last-child{border-bottom:none}
+  .row1{display:flex; align-items:center; gap:10px; cursor:pointer; -webkit-tap-highlight-color:transparent}
+  .row1 .lead{display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1 1 auto; min-width:0}
+  .row1 .nm{font-size:1.05rem; font-weight:700}
+  .row1 .code{font-size:.76rem; color:var(--muted)}
+  .row1 .px{display:flex; flex-direction:column; align-items:flex-end; flex:0 0 auto; line-height:1.25}
+  .row1 .price{font-size:clamp(1.2rem,5vw,1.5rem); font-weight:800; letter-spacing:-.01em}
+  .row1 .chg{font-size:.9rem; font-weight:700; padding:1px 7px; border-radius:7px; margin-top:3px; white-space:nowrap}
+  .tag{font-size:.7rem; padding:3px 9px; border-radius:999px; font-weight:700; white-space:nowrap}
+  .tag.strong{background:var(--up-bg); color:var(--up)}
+  .tag.weak{background:var(--down-bg); color:var(--down)}
+  .tag.flat{background:#f0f0f0; color:var(--ink-soft)}
+  .tag.pos{background:#fdeee0; color:var(--gold)}
+  .spark{display:inline-flex; align-items:center}
+  @media(max-width:480px){ .spark{display:none} }
+
+  .note{font-size:.9rem; color:var(--ink-soft); margin-top:8px}
+  .note b.hl-up{color:var(--up); font-weight:700}
+  .note b.hl-down{color:var(--down); font-weight:700}
+
+  .detail{display:none; margin-top:12px; padding:4px 16px; background:#faf9f6; border-radius:12px}
+  .stock.open .detail{display:block}
+  .metric{padding:11px 0; border-top:1px dashed var(--line)}
+  .metric:first-child{border-top:none}
+  .metric .m-head{display:flex; align-items:baseline; gap:8px; flex-wrap:wrap}
+  .metric .m-name{font-size:.8rem; color:var(--navy); font-weight:700}
+  .metric .m-val{font-size:.98rem; font-weight:800}
+  .metric .m-mean{font-size:.86rem; color:var(--ink-soft); margin-top:4px; line-height:1.55}
+  .metric .m-mean .k-up{color:var(--up); font-weight:700}
+  .metric .m-mean .k-down{color:var(--down); font-weight:700}
+
+  .delBtn{
+    margin-top:10px; width:100%; font-size:.82rem; padding:10px; cursor:pointer;
+    color:var(--down); background:#fff; border:1px solid #cfe0d3; border-radius:10px;
+  }
+  .delBtn:hover{background:var(--down-bg)}
+
+  .rank-cols{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  .rank-item{display:flex; align-items:baseline; gap:8px; padding:8px 0; border-bottom:1px dashed var(--line); font-size:.9rem}
+  .rank-item:last-child{border-bottom:none}
+  .rank-item .nm{font-weight:700}
+  .rank-item .code{color:var(--muted); font-size:.74rem}
+  .rank-item .pct{margin-left:auto; font-weight:800}
+
+  .legal{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+  .legal .cell{text-align:center; padding:12px 6px; background:#faf9f6; border-radius:11px}
+  .legal .who{font-size:.8rem; color:var(--muted)}
+  .legal .amt{font-size:clamp(1rem,4vw,1.2rem); font-weight:800}
+  .legal-total{grid-column:1/-1; margin-top:2px; padding:12px 14px; background:#faf9f6; border-radius:11px; font-size:.86rem; color:var(--ink-soft); line-height:1.6}
+  .legal-total b{color:var(--navy)}
+
+  .empty{padding:20px 8px; color:var(--muted); font-size:.9rem; text-align:center}
+  footer{font-size:.72rem; color:var(--muted); margin-top:26px; line-height:1.7}
+  footer a{color:var(--navy)}
+
+  /* 試算買賣價 */
+  .calc{margin-top:14px; padding:14px; background:#fff; border:1px solid var(--line); border-radius:12px}
+  .calc-h{font-size:.82rem; font-weight:700; color:var(--navy); margin-bottom:10px; line-height:1.5}
+  .calc-in{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .calc-in input{flex:1 1 120px; min-width:0; font-size:1rem; padding:11px 12px; border:1px solid var(--line); border-radius:10px; font-family:inherit; color:var(--ink)}
+  .calc-in input:focus{outline:2px solid var(--navy); outline-offset:1px}
+  .calc-in button{font-size:.9rem; font-weight:700; padding:11px 16px; border-radius:10px; border:none; cursor:pointer; color:#fff; white-space:nowrap}
+  .calc-in .buy{background:var(--up)}
+  .calc-in .sell{background:var(--down)}
+  .calc-out{margin-top:12px; font-size:.86rem; color:var(--ink-soft); line-height:1.6}
+  .calc-out .chip{display:inline-block; font-size:.84rem; font-weight:800; padding:3px 13px; border-radius:999px; margin-bottom:8px}
+  .chip.good{background:#e9f4ec; color:#1d7a3e}
+  .chip.ok{background:#eef1f5; color:#23415e}
+  .chip.warn{background:#fdf1e3; color:#b07a2c}
+  .calc-out .cl{display:block; margin-top:5px}
+  .calc-verdict{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px}
+  .calc-verdict .chip{margin-bottom:0}
+  .prob{display:inline-block; font-size:.86rem; font-weight:800; padding:5px 14px; border-radius:999px}
+  .prob.high{background:#e9f4ec; color:#1d7a3e}
+  .prob.mid{background:#fdf1e3; color:#b07a2c}
+  .prob.low{background:#f0f1f3; color:#6b7280}
+  .arr{font-size:.68rem; padding:3px 8px; border-radius:6px; font-weight:700; white-space:nowrap; border:1px solid currentColor}
+  .arr.up{color:var(--up); background:var(--up-bg)}
+  .arr.down{color:var(--down); background:var(--down-bg)}
+  .arr.flat{color:var(--ink-soft); background:#f0f0f0}
+  .ladder{margin:8px 0 6px}
+  .ladder-verdict{font-size:.86rem; font-weight:700; padding:9px 13px; border-radius:9px; margin-bottom:8px; line-height:1.5}
+  .ladder-verdict.up{background:var(--up-bg); color:var(--up)}
+  .ladder-verdict.down{background:var(--down-bg); color:var(--down)}
+  .ladder-verdict.flat{background:#f0f0f0; color:var(--ink-soft)}
+  .ladder svg{margin-top:2px}
+  .ladder .cap{font-size:.72rem; color:var(--muted); margin-top:4px; line-height:1.5}
+
+  @media(max-width:600px){
+    html{font-size:18px}
+    html.fs-big{font-size:21px}
+    html.fs-bigger{font-size:24px}
+    .wrap{padding:14px 12px 44px}
+    .card{padding:15px 14px}
+    .rank-cols{grid-template-columns:1fr; gap:6px}
+    .legal{grid-template-columns:1fr}
+    .idx .meta.right{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <h1>台股看盤小幫手</h1>
+      <span class="sub">每日看盤一頁</span>
+      <span class="badge" id="dataBadge">示範數據</span>
+    </div>
+    <div class="fsbtns" id="fsbtns">
+      <button data-fs="0" class="on">標準</button>
+      <button data-fs="big">大</button>
+      <button data-fs="bigger">特大</button>
+    </div>
+  </header>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="card">
+    <h2 class="sec">大盤指數（加權指數）</h2>
+    <p class="sec-desc" id="idx-time"></p>
+    <div class="idx" id="idx"></div>
+    <div id="idx-chart" style="margin-top:14px"></div>
+  </div>
+
+  <div class="card">
+    <div class="watch-head">
+      <h2 class="sec" style="margin:0">自選股</h2>
+      <button class="addBtn" id="addBtn">＋ 新增股票</button>
+    </div>
+    <p class="sec-desc">點股票展開：每項數字都有白話說明，還能試算你自己的買賣價</p>
+    <div class="add-panel" id="addPanel" hidden>
+      <input id="search" type="search" placeholder="輸入名稱或代號，例如 台積電 或 2330" autocomplete="off">
+      <div class="add-list" id="addList"></div>
+    </div>
+    <div id="stocks"></div>
+  </div>
+
+  <div class="card">
+    <h2 class="sec">今日漲跌排行</h2>
+    <p class="sec-desc">依資料庫裡的股票排出漲最多與跌最多（示範）</p>
+    <div class="rank-cols">
+      <div id="top-up"></div>
+      <div id="top-down"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="sec">三大法人買賣超</h2>
+    <p class="sec-desc">買超＝今天買的比賣的多；賣超＝賣的比買的多。下面是今天三大法人「淨買賣」金額（億元）。</p>
+    <div class="legal" id="legal"></div>
+  </div>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+"use strict";
+const K = "taiwan-stock-v2";
+
+let INDEX = { value:22734.58, prevClose:22590.22, chg:144.36, chgPct:0.64, volume:"3,842 億", time:"13:30 收盤" };
+let indexSeries = [
+  22380,22410,22490,22520,22470,22510,22580,22620,22590,22640,
+  22680,22620,22700,22740,22710,22680,22730,22760,22790,22740,
+  22810,22840,22800,22760,22820,22850,22820,22790,22734,22734
+];
+
+/* 示範資料庫：代號、名稱、現價、昨收、開、高、低、今量、均量、5日線、月線、支撐、壓力、殖利率%、5日走勢 */
+let DB = [
+  {code:"2330",name:"台積電", price:1085.00, prev:1065.00, open:1068, high:1090, low:1065, vol:38214, avgVol:32500, ma5:1071.00, ma20:1042.00, sup:1050, prs:1100, dy:1.6, spark:[1050,1058,1068,1062,1085]},
+  {code:"2317",name:"鴻海",   price:205.50, prev:208.00, open:207.5, high:209, low:204, vol:84120, avgVol:78000, ma5:207.80, ma20:203.10, sup:200, prs:212, dy:3.9, spark:[210,208.5,207,209,205.5]},
+  {code:"2454",name:"聯發科", price:1275.00, prev:1260.00, open:1262, high:1285, low:1258, vol:9840, avgVol:9100, ma5:1266.00, ma20:1238.00, sup:1240, prs:1300, dy:4.2, spark:[1245,1250,1262,1258,1275]},
+  {code:"2412",name:"中華電", price:126.50, prev:126.00, open:126, high:127, low:125.5, vol:18320, avgVol:19000, ma5:126.20, ma20:125.60, sup:124, prs:128, dy:4.6, spark:[126,125.8,126.1,126,126.5]},
+  {code:"2882",name:"國泰金", price:68.30, prev:67.20, open:67.5, high:68.6, low:67.1, vol:45620, avgVol:40000, ma5:67.40, ma20:66.10, sup:66, prs:70, dy:3.2, spark:[66.5,67,67.2,67,68.3]},
+  {code:"1301",name:"台塑",   price:45.20, prev:46.00, open:45.8, high:46.2, low:45.0, vol:21450, avgVol:20000, ma5:45.90, ma20:47.30, sup:44, prs:47, dy:4.1, spark:[46.5,46.2,45.8,46,45.2]},
+  {code:"2603",name:"長榮",   price:205.00, prev:201.50, open:202, high:206.5, low:201, vol:28600, avgVol:24000, ma5:201.20, ma20:193.40, sup:196, prs:210, dy:5.8, spark:[198,200,202.5,201.5,205]},
+  {code:"2002",name:"中鋼",   price:22.15, prev:22.40, open:22.3, high:22.5, low:22.0, vol:15880, avgVol:17500, ma5:22.35, ma20:22.90, sup:21.5, prs:23, dy:2.7, spark:[22.6,22.5,22.3,22.4,22.15]},
+  {code:"2308",name:"台達電", price:395.00, prev:388.00, open:389, high:398, low:387, vol:12040, avgVol:11000, ma5:390.50, ma20:382.00, sup:380, prs:405, dy:2.1, spark:[382,386,390,388,395]},
+  {code:"2881",name:"富邦金", price:92.40, prev:91.10, open:91.5, high:92.8, low:91.2, vol:32100, avgVol:30000, ma5:91.60, ma20:90.20, sup:89, prs:95, dy:4.0, spark:[90,90.8,91.1,91.3,92.4]},
+  {code:"2891",name:"中信金", price:38.60, prev:38.20, open:38.2, high:38.8, low:38.1, vol:52000, avgVol:48000, ma5:38.30, ma20:37.90, sup:37, prs:40, dy:4.5, spark:[37.9,38.1,38.2,38.2,38.6]},
+  {code:"1216",name:"統一",   price:78.90, prev:79.50, open:79.2, high:79.6, low:78.6, vol:8900, avgVol:9500, ma5:79.10, ma20:79.80, sup:77, prs:82, dy:3.4, spark:[80,79.8,79.5,79.4,78.9]},
+  {code:"2609",name:"陽明",   price:78.30, prev:76.80, open:77, high:79.0, low:76.5, vol:24000, avgVol:21000, ma5:77.20, ma20:74.90, sup:74, prs:82, dy:6.8, spark:[75.5,76.8,77.5,77.2,78.3]},
+  {code:"2886",name:"兆豐金", price:39.20, prev:39.00, open:39.0, high:39.4, low:38.9, vol:28000, avgVol:27000, ma5:39.05, ma20:38.60, sup:38, prs:41, dy:4.2, spark:[38.8,39.0,39.1,39.0,39.2]},
+  {code:"1101",name:"台泥",   price:33.50, prev:33.80, open:33.7, high:33.9, low:33.3, vol:14500, avgVol:15000, ma5:33.70, ma20:34.20, sup:32.5, prs:35, dy:3.0, spark:[34.0,33.9,33.8,33.7,33.5]},
+  {code:"2382",name:"廣達",   price:285.00, prev:279.00, open:280, high:288, low:278, vol:18000, avgVol:16000, ma5:281.00, ma20:274.00, sup:270, prs:295, dy:4.6, spark:[274,278,282,280,285]},
+  {code:"2303",name:"聯電",   price:48.20, prev:48.75, open:48.6, high:48.9, low:48.1, vol:35000, avgVol:33000, ma5:48.60, ma20:49.30, sup:47, prs:50, dy:6.1, spark:[49.2,49.0,48.8,48.7,48.2]},
+  {code:"2884",name:"玉山金", price:27.10, prev:26.90, open:26.9, high:27.2, low:26.85, vol:40000, avgVol:38000, ma5:27.00, ma20:26.70, sup:26, prs:28, dy:4.0, spark:[26.7,26.8,26.9,26.9,27.1]},
+  {code:"1326",name:"台化",   price:41.30, prev:41.90, open:41.7, high:42.0, low:41.1, vol:11200, avgVol:10500, ma5:41.70, ma20:43.00, sup:40, prs:44, dy:4.0, spark:[42.3,42.0,41.8,41.6,41.3]},
+  {code:"2207",name:"和泰車", price:620.00, prev:615.00, open:616, high:624, low:614, vol:1200, avgVol:1100, ma5:617.00, ma20:610.00, sup:600, prs:640, dy:3.0, spark:[610,613,616,615,620]},
+  {code:"2474",name:"可成",   price:180.50, prev:181.00, open:181, high:182, low:179.5, vol:4200, avgVol:4500, ma5:180.80, ma20:179.50, sup:175, prs:186, dy:5.5, spark:[183,182,181.5,181,180.5]},
+  {code:"3008",name:"大立光", price:2550.00, prev:2520.00, open:2525, high:2570, low:2515, vol:800, avgVol:750, ma5:2530.00, ma20:2490.00, sup:2450, prs:2620, dy:2.9, spark:[2500,2515,2530,2520,2550]}
+];
+/* 近一個月高低區間 [最低, 最高]（示範） */
+const RANGE = {
+  "2330":[1010,1120],"2317":[195,215],"2454":[1200,1350],"2412":[123,129],
+  "2882":[64,71],"1301":[43,49],"2603":[188,216],"2002":[21.2,23.6],
+  "2308":[375,410],"2881":[88,96],"2891":[37.2,40.2],"1216":[76,83],
+  "2609":[72,86],"2886":[38,41],"1101":[32,35.5],"2382":[265,300],
+  "2303":[46.5,51],"2884":[26,28.2],"1326":[40,45],"2207":[595,650],
+  "2474":[172,190],"3008":[2420,2700]
+};
+DB.forEach(s=>{ const r=RANGE[s.code]; if(r && !s.hi30){ s.lo30=r[0]; s.hi30=r[1]; } });
+
+/* 季線(60日)／年線(240日) 示範值：由月線趨勢推導，示範用，接真資料後改由 K 線計算 */
+const round2 = n => Math.round(n*100)/100;
+DB.forEach(s=>{
+  if(s.ma60!=null) return;
+  const trend = (s.price - s.ma20)/s.ma20;
+  s.ma60  = round2(s.ma20 * (1 - trend*1.5));
+  s.ma240 = round2(s.ma20 * (1 - trend*5));
+  s.hi60  = round2(Math.max(s.hi30, s.price) * (1 + 0.02 + Math.abs(trend)*0.3));
+  s.lo60  = round2(Math.min(s.lo30, s.price) * (1 - 0.02 - Math.abs(trend)*0.3));
+  s.hi240 = round2(s.hi60 * (1 + 0.10 + Math.abs(trend)*0.4));
+  s.lo240 = round2(s.lo60 * (1 - 0.10 - Math.abs(trend)*0.4));
+});
+const DEFAULT_WATCH = ["2330","2317","2412","2882","1301","2603","2002"];
+let LEGAL = [{who:"外資",amt:+152.4},{who:"投信",amt:+38.6},{who:"自營商",amt:-12.3}];
+
+const fmt = n => n.toLocaleString("zh-TW",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtPct = p => (p>=0?"+":"") + p.toFixed(2) + "%";
+const signAmt = v => (v>=0?"+":"") + v.toFixed(1);
+const dirClass = v => v>=0 ? "up" : "down";
+const dirBg = v => v>=0 ? "up-bg" : "down-bg";
+const pctOf = s => (s.price - s.prev)/s.prev*100;
+const byCode = c => DB.find(x=>x.code===c);
+const gapPct = (a,b) => (a-b)/b*100;
+
+function getWatch(){
+  try{
+    const raw = localStorage.getItem(K+"-watch");
+    if(raw){
+      const a = JSON.parse(raw);
+      if(Array.isArray(a)) return a.filter(c=>byCode(c));
+    }
+  }catch(e){}
+  return DEFAULT_WATCH.slice();
+}
+function setWatch(a){ try{ localStorage.setItem(K+"-watch", JSON.stringify(a)); }catch(e){} }
+
+function analyze(s){
+  const pct = pctOf(s);
+  let dir;
+  if(pct>=2) dir="大漲";
+  else if(pct>=0.5) dir="上漲";
+  else if(pct>-0.5) dir="小漲小跌";
+  else if(pct>-2) dir="下跌";
+  else dir="大跌";
+  const aboveMa5 = s.price >= s.ma5;
+  const maText = aboveMa5 ? "站上 5 日線，短線偏強" : "跌破 5 日線，短線偏弱";
+  const volBig = s.vol > s.avgVol;
+  const volText = volBig ? "量能放大，買賣熱絡" : "量能縮小，觀望居多";
+  let tag, tagCls;
+  if(pct>=2){tag="強勢"; tagCls="strong";}
+  else if(pct>=0.5){tag="偏多"; tagCls="pos";}
+  else if(pct>-0.5){tag="整理"; tagCls="flat";}
+  else if(pct>-2){tag="偏弱"; tagCls="flat";}
+  else {tag="轉弱"; tagCls="weak";}
+  return {pct, dir, maText, volText, tag, tagCls, aboveMa5};
+}
+
+function metricMeanings(s){
+  const m = [];
+  const dayRange = s.high - s.low || 1;
+  const pos = (s.price - s.low)/dayRange;
+
+  let dayMean;
+  if(pos>=0.7) dayMean = `今天最低 ${fmt(s.low)}、最高 ${fmt(s.high)}，收在接近<b>最高</b>的 ${fmt(s.price)}，代表尾盤還有人願意買，氣勢不錯。`;
+  else if(pos<=0.3) dayMean = `今天最低 ${fmt(s.low)}、最高 ${fmt(s.high)}，收在接近<b>最低</b>的 ${fmt(s.price)}，代表尾盤賣壓比較重，明天開盤要多注意。`;
+  else dayMean = `今天最低 ${fmt(s.low)}、最高 ${fmt(s.high)}，收在 ${fmt(s.price)}，大約在中間，買賣力量差不多。`;
+  m.push({name:"今天走勢", val:`開 ${fmt(s.open)}　高 ${fmt(s.high)}　低 ${fmt(s.low)}`, mean:dayMean});
+
+  const g5 = gapPct(s.price, s.ma5);
+  const ma5Mean = s.price>=s.ma5
+    ? `最近 5 天的平均價是 ${fmt(s.ma5)}。今天 ${fmt(s.price)} 比它<b class="k-up">高 ${Math.abs(g5).toFixed(1)}%</b>，代表這 5 天買的人<b>平均是賺的</b>，短線算強。跌回 ${fmt(s.ma5)} 以下才算轉弱。`
+    : `最近 5 天的平均價是 ${fmt(s.ma5)}。今天 ${fmt(s.price)} 比它<b class="k-down">低 ${Math.abs(g5).toFixed(1)}%</b>，代表這 5 天買的人<b>平均是賠的</b>，短線偏弱。要漲回 ${fmt(s.ma5)} 以上才算轉強。`;
+  m.push({name:"5 日線（最近 5 天平均價）", val:fmt(s.ma5), mean:ma5Mean});
+
+  const g20 = gapPct(s.price, s.ma20);
+  const pos30 = Math.max(0, Math.min(100, (s.price - s.lo30)/(s.hi30 - s.lo30)*100));
+  const pos30txt = pos30<=25 ? "靠下方、相對便宜" : (pos30>=75 ? "靠上方、相對貴" : "中間位置");
+  const ma20Mean = (s.price>=s.ma20
+    ? `最近 20 天（大約一個月）的平均價是 ${fmt(s.ma20)}。今天比它<b class="k-up">高 ${Math.abs(g20).toFixed(1)}%</b>，代表這個月買的人<b>平均有賺</b>，大家比較抱得住。`
+    : `最近 20 天（大約一個月）的平均價是 ${fmt(s.ma20)}。今天比它<b class="k-down">低 ${Math.abs(g20).toFixed(1)}%</b>，代表這個月買的人<b>平均是賠的</b>，上面的賣壓比較重。`)
+    + ` 近一個月股價<b>最高 ${fmt(s.hi30)}、最低 ${fmt(s.lo30)}</b>，現在 ${fmt(s.price)} 大約在區間 <b>${pos30.toFixed(0)}%</b> 的位置（${pos30txt}）。`;
+  m.push({name:"月線（最近 20 天平均價）", val:fmt(s.ma20), mean:ma20Mean});
+
+  const g60 = gapPct(s.price, s.ma60);
+  const pos60 = Math.max(0, Math.min(100, (s.price - s.lo60)/(s.hi60 - s.lo60)*100));
+  const pos60txt = pos60<=25 ? "靠下方、相對便宜" : (pos60>=75 ? "靠上方、相對貴" : "中間位置");
+  const ma60Mean = (s.price>=s.ma60
+    ? `最近 60 天（大約三個月）的平均價是 ${fmt(s.ma60)}。今天比它<b class="k-up">高 ${Math.abs(g60).toFixed(1)}%</b>，代表這三個月買的人<b>平均有賺</b>，中期偏強。`
+    : `最近 60 天（大約三個月）的平均價是 ${fmt(s.ma60)}。今天比它<b class="k-down">低 ${Math.abs(g60).toFixed(1)}%</b>，代表這三個月買的人<b>平均是賠的</b>，中期偏弱。`)
+    + ` 近三個月股價<b>最高 ${fmt(s.hi60)}、最低 ${fmt(s.lo60)}</b>，現在 ${fmt(s.price)} 大約在區間 <b>${pos60.toFixed(0)}%</b> 的位置（${pos60txt}）。`;
+  m.push({name:"季線（最近 60 天平均價）", val:fmt(s.ma60), mean:ma60Mean});
+
+  const g240 = gapPct(s.price, s.ma240);
+  const pos240 = Math.max(0, Math.min(100, (s.price - s.lo240)/(s.hi240 - s.lo240)*100));
+  const pos240txt = pos240<=25 ? "靠下方、相對便宜" : (pos240>=75 ? "靠上方、相對貴" : "中間位置");
+  const ma240Mean = (s.price>=s.ma240
+    ? `最近 240 天（大約一年）的平均價是 ${fmt(s.ma240)}。今天比它<b class="k-up">高 ${Math.abs(g240).toFixed(1)}%</b>，代表這一年買的人<b>平均有賺</b>，長期偏強。`
+    : `最近 240 天（大約一年）的平均價是 ${fmt(s.ma240)}。今天比它<b class="k-down">低 ${Math.abs(g240).toFixed(1)}%</b>，代表這一年買的人<b>平均是賠的</b>，長期偏弱。`)
+    + ` 近一年股價<b>最高 ${fmt(s.hi240)}、最低 ${fmt(s.lo240)}</b>，現在 ${fmt(s.price)} 大約在區間 <b>${pos240.toFixed(0)}%</b> 的位置（${pos240txt}）。`;
+  m.push({name:"年線（最近 240 天平均價）", val:fmt(s.ma240), mean:ma240Mean});
+
+  const dSup = gapPct(s.price, s.sup);
+  const dPrs = gapPct(s.prs, s.price);
+  let posMean;
+  if(s.price < s.sup) posMean = "現在股價已經<b>跌破支撐</b>，代表想買的人變少了，要小心繼續往下掉。";
+  else if(s.price > s.prs) posMean = "現在股價已經<b>漲過壓力</b>，氣勢比較強；但如果漲多了才追，要小心之後回檔。";
+  else if(dPrs < 2) posMean = "現在離壓力只剩一點點，要買的話最好等它<b>真的漲過去</b>再買，不然容易買在短線高點。";
+  else if(dSup < 2) posMean = "現在離支撐很近，這個價位算是<b>有守住的機會</b>，一旦跌破就要小心。";
+  else posMean = "現在卡在支撐和壓力中間，<b>往上往下都還有空間</b>。";
+  m.push({
+    name:"支撐／壓力（跌到這有人買／漲到這賣不掉）",
+    val:`支撐 ${fmt(s.sup)}　壓力 ${fmt(s.prs)}`,
+    mean:`支撐 ${fmt(s.sup)} 的意思是：跌到這個價位附近，通常會有人想買，所以比較容易<b>止跌</b>。壓力 ${fmt(s.prs)} 的意思是：漲到這個價位附近，之前買貴的人會想賣，所以比較容易<b>卡住</b>。現在股價 ${fmt(s.price)}，往下到支撐還有 ${Math.abs(dSup).toFixed(1)}%、往上到壓力只剩 ${Math.abs(dPrs).toFixed(1)}%。${posMean}`
+  });
+
+  const vr = s.vol/s.avgVol;
+  let volMean;
+  if(vr>=1.3) volMean = `今天成交 ${s.vol.toLocaleString("zh-TW")} 張，平常大約 ${s.avgVol.toLocaleString("zh-TW")} 張，今天比平常<b class="k-up">多 ${Math.round((vr-1)*100)}%</b>，買賣比較熱絡，走勢比較容易延續。`;
+  else if(vr<=0.7) volMean = `今天成交 ${s.vol.toLocaleString("zh-TW")} 張，平常大約 ${s.avgVol.toLocaleString("zh-TW")} 張，今天比平常<b class="k-down">少 ${Math.round((1-vr)*100)}%</b>，大家在觀望，比較看不出方向。`;
+  else volMean = `今天成交 ${s.vol.toLocaleString("zh-TW")} 張，跟平常差不多，沒有特別熱也沒有特別冷。`;
+  m.push({name:"成交量（今天成交幾張）", val:`${s.vol.toLocaleString("zh-TW")} 張`, mean:volMean});
+
+  let dyMean = `以現在股價算，一年股息大約 ${s.dy.toFixed(1)}%，也就是買 100 元一年大約領 <b>${s.dy.toFixed(1)} 元</b>股息。`;
+  if(s.dy>=4) dyMean += " 這算偏高，適合<b>長期放著領息</b>。";
+  else if(s.dy<2) dyMean += " 這算偏低，這檔主要是賺<b>價差</b>、不是領股息。";
+  m.push({name:"殖利率（一年股息 ÷ 股價）", val:`${s.dy.toFixed(1)}%／年`, mean:dyMean});
+
+  return m;
+}
+
+function calcPrice(s, P, side){
+  /* 台股 ±10% 漲跌停（以昨收算，取整到 0.01，略去 tick 細節，故標「約」） */
+  const up = Math.round(s.prev*1.1*100)/100;
+  const dn = Math.round(s.prev*0.9*100)/100;
+  const posPct = Math.max(0, Math.min(100, (P - s.lo30)/(s.hi30 - s.lo30)*100));
+  const vsNow = (P - s.price)/s.price*100;
+  const distPct = Math.abs(P - s.price)/s.price*100;
+
+  /* 1) 價格好不好（划不划算） */
+  let chip, cls, q = [];
+  if(side==="sell"){
+    if(P >= s.prs){ chip="好價"; cls="good"; q.push(`這個價比壓力 ${fmt(s.prs)} 還高，是漂亮的好價位。`); }
+    else if(P > s.price*1.02){ chip="合理偏高"; cls="good"; q.push("這個價比現價高，是在等它反彈再賣，合理。"); }
+    else if(P >= s.price*0.98){ chip="合理"; cls="ok"; q.push("這個價跟現價差不多，是可以接受的範圍。"); }
+    else if(P >= s.sup){ chip="偏低"; cls="warn"; q.push("這個價比現價低，等於少賺一點，除非急用錢，不然可以再等。"); }
+    else { chip="太低"; cls="warn"; q.push(`這個價跌破支撐 ${fmt(s.sup)}，等於認賠殺出，除非看壞後市，否則不建議。`); }
+  } else {
+    if(P <= s.sup){ chip="便宜"; cls="good"; q.push(`這個價比支撐 ${fmt(s.sup)} 還低，是便宜的價位。`); }
+    else if(P < s.price*0.98){ chip="合理偏低"; cls="good"; q.push("這個價比現價低，是在等它回檔再買，合理。"); }
+    else if(P <= s.price*1.02){ chip="合理"; cls="ok"; q.push("這個價跟現價差不多，是可以接受的範圍。"); }
+    else if(P <= s.prs){ chip="偏高"; cls="warn"; q.push("這個價比現價高，是在追高，風險比較大。"); }
+    else { chip="太貴"; cls="warn"; q.push(`這個價超過壓力 ${fmt(s.prs)}，是明顯追高，不建議。`); }
+  }
+
+  /* 2) 成交機率（三級） */
+  let prob, probCls;
+  if(P > up || P < dn){ prob = "幾乎不可能"; probCls = "low"; }
+  else if(P > s.hi30 || P < s.lo30 || distPct > 5){ prob = (side==="sell" ? "要等大漲" : "要等大跌"); probCls = "mid"; }
+  else { prob = "今天很可能"; probCls = "high"; }
+
+  /* 3) 今天到不到得了（漲跌停） */
+  let fillLine;
+  if(side==="sell"){
+    if(P > up) fillLine = `今天最高只能漲到漲停約 ${fmt(up)}（昨收 ${fmt(s.prev)} 的 +10%），你掛 ${fmt(P)} 超過了，今天賣不到。`;
+    else fillLine = `今天上限是漲停約 ${fmt(up)}，你的價在範圍內；但漲停鎖住時要有人買才賣得掉。`;
+  } else {
+    if(P < dn) fillLine = `今天最低只能跌到跌停約 ${fmt(dn)}（昨收 ${fmt(s.prev)} 的 −10%），你掛 ${fmt(P)} 低於了，今天買不到。`;
+    else fillLine = `今天下限是跌停約 ${fmt(dn)}，你的價在範圍內；但跌停鎖住時要有人賣才買得到。`;
+  }
+
+  /* 4) 近一個月有沒有出現過 */
+  let reach;
+  if(P > s.hi30) reach = `近一個月最高才 ${fmt(s.hi30)}，你這個價從沒到過。`;
+  else if(P < s.lo30) reach = `近一個月最低才 ${fmt(s.lo30)}，你這個價從沒到過。`;
+  else reach = `近一個月 ${fmt(s.lo30)}～${fmt(s.hi30)} 之間出現過，成交機會正常。`;
+
+  const where = posPct<=25 ? "偏低、比較便宜" : (posPct>=75 ? "偏高、比較貴" : "在中間");
+  const lines = [fillLine, reach, ...q,
+    `這個價位在「近一個月高低 ${fmt(s.lo30)}～${fmt(s.hi30)}」的 ${posPct.toFixed(0)}% 位置（0% 最低、100% 最高），${where}。`,
+    `對照：現價 ${fmt(s.price)}、今日漲停約 ${fmt(up)}、跌停約 ${fmt(dn)}、支撐 ${fmt(s.sup)}、壓力 ${fmt(s.prs)}；你的價比現價${vsNow>=0?"高":"低"} ${Math.abs(vsNow).toFixed(1)}%。`];
+  return {chip, cls, prob, probCls, lines};
+}
+
+function sparkline(arr, w, h, up){
+  const min=Math.min(...arr), max=Math.max(...arr), range=(max-min)||1;
+  const pts = arr.map((v,i)=>[(i/(arr.length-1))*w, h-(v-min)/range*(h-4)-2]);
+  const line = pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
+  const col = up ? "var(--up)" : "var(--down)";
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="overflow:visible">
+    <polyline points="${line}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="3.2" fill="${col}"/>
+  </svg>`;
+}
+function indexChart(series){
+  const w=860, h=200, pad=10;
+  const min=Math.min(...series), max=Math.max(...series), range=(max-min)||1;
+  const pts = series.map((v,i)=>[pad+(i/(series.length-1))*(w-pad*2), h-pad-(v-min)/range*(h-pad*2)]);
+  const line = pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
+  const last = pts[pts.length-1];
+  const area = `M ${pad},${h-pad} L ${pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" L ")} L ${last[0].toFixed(1)},${h-pad} Z`;
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
+    <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d2302f" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#d2302f" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${area}" fill="url(#ag)"/>
+    <polyline points="${line}" fill="none" stroke="#d2302f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="5" fill="#d2302f" stroke="#fff" stroke-width="2"/>
+    <text x="${pad}" y="16" font-size="11" fill="#888">近 30 日加權指數走勢</text>
+  </svg>`;
+}
+
+function renderSummary(){
+  const watch = getWatch().map(byCode).filter(Boolean);
+  const i = INDEX, up = i.chg>=0, c = dirClass(i.chg);
+  const ups = watch.filter(s=>s.price>=s.prev).length;
+  const downs = watch.filter(s=>s.price<s.prev).length;
+  const stmt = up
+    ? "今天台股整體<b>偏強</b>，不過漲多了也會回檔，別急著追高。"
+    : "今天盤面<b>偏弱</b>，先看手上股票的支撐價有沒有守住再決定。";
+  document.getElementById("summary").innerHTML =
+    `<b>今日重點：</b>大盤收在 <b>${fmt(i.value)} 點</b>，${up?"上漲":"下跌"} <b class="${c}">${fmtPct(i.chgPct)}</b>。` +
+    `你的自選股 <b>${watch.length}</b> 檔裡，<b class="${ups?"up":"down"}">${ups}</b> 檔上漲、<b class="${downs?"down":"up"}">${downs}</b> 檔下跌。 ${stmt}`;
+}
+
+function renderIdx(){
+  const i = INDEX, up = i.chg>=0, c = dirClass(i.chg), b = dirBg(i.chg);
+  document.getElementById("idx-time").textContent = `更新時間：${i.time}（示範）`;
+  document.getElementById("idx").innerHTML = `
+    <div><div class="big ${c}">${fmt(i.value)}</div><div class="meta">加權指數</div></div>
+    <div>
+      <span class="chg ${c} ${b}">${signAmt(i.chg)}（${fmtPct(i.chgPct)}）</span>
+      <div class="meta" style="margin-top:6px">成交值 ${i.volume}</div>
+    </div>
+    <div class="meta right" style="margin-left:auto">昨收 ${fmt(i.prevClose)}<br>紅＝漲　綠＝跌</div>`;
+  document.getElementById("idx-chart").innerHTML = indexChart(indexSeries);
+}
+
+function maVerdict(s){
+  const aboveCount = (s.price>s.ma5?1:0)+(s.price>s.ma20?1:0)+(s.price>s.ma60?1:0)+(s.price>s.ma240?1:0);
+  const bullOrder = s.ma5>=s.ma20 && s.ma20>=s.ma60 && s.ma60>=s.ma240;
+  const bearOrder = s.ma5<=s.ma20 && s.ma20<=s.ma60 && s.ma60<=s.ma240;
+  const arr = bullOrder ? "多頭排列" : (bearOrder ? "空頭排列" : "均線糾結");
+  const label = bullOrder ? "多頭" : (bearOrder ? "空頭" : "糾結");
+  const posTxt = aboveCount===4 ? "站上全部 4 條均線" : (aboveCount===0 ? "跌破全部 4 條均線" : `夾在均線中間（站上 ${aboveCount} 條）`);
+  const vcls = (bullOrder && aboveCount>=3) ? "up" : ((bearOrder && aboveCount<=1) ? "down" : "flat");
+  const advice = (bullOrder && aboveCount===4) ? "短均線在上、股價最強，偏多。"
+    : ((bearOrder && aboveCount===0) ? "均線由短到長愈來愈高，股價最弱，偏空。"
+    : "多空混在一起，方向不明，先觀望。");
+  return {aboveCount, bullOrder, bearOrder, arr, label, posTxt, vcls, advice};
+}
+
+function maLadder(s){
+  const mas = [{k:"年",v:s.ma240},{k:"季",v:s.ma60},{k:"月",v:s.ma20},{k:"5日",v:s.ma5}];
+  const all = [...mas.map(m=>m.v), s.price];
+  const lo = Math.min(...all), hi = Math.max(...all);
+  const pad = (hi-lo)*0.12 || 1;
+  const min = lo-pad, max = hi+pad;
+  const W=720, H=170, padX=54, axisY=100;
+  const x = v => padX + (v-min)/(max-min)*(W-padX*2);
+
+  const v = maVerdict(s);
+  const pcol = v.vcls==="up" ? "#d2302f" : (v.vcls==="down" ? "#1d7a3e" : "#23415e");
+
+  const sorted = [...mas].sort((a,b)=>a.v-b.v);
+  const laneLast = [];
+  const marks = sorted.map(m=>{
+    const xx = x(m.v);
+    let L=0;
+    while(laneLast[L]!==undefined && xx-laneLast[L] < 74) L++;
+    laneLast[L]=xx;
+    const ly = axisY-24-L*18;
+    return `<line x1="${xx.toFixed(1)}" y1="${axisY-7}" x2="${xx.toFixed(1)}" y2="${axisY+7}" stroke="#c3bcae" stroke-width="1.5"/>
+      <circle cx="${xx.toFixed(1)}" cy="${axisY}" r="3.6" fill="#8a8f96"/>
+      <text x="${xx.toFixed(1)}" y="${ly}" text-anchor="middle" font-size="13" fill="#565d66">${m.k} ${fmt(m.v)}</text>`;
+  }).join("");
+
+  const px = x(s.price);
+  const svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+    <line x1="${padX}" y1="${axisY}" x2="${W-padX}" y2="${axisY}" stroke="#e3ddd2" stroke-width="2"/>
+    ${marks}
+    <polygon points="${px.toFixed(1)},${axisY-2} ${(px-7).toFixed(1)},${axisY-15} ${(px+7).toFixed(1)},${axisY-15}" fill="${pcol}"/>
+    <text x="${px.toFixed(1)}" y="${axisY+28}" text-anchor="middle" font-size="14" font-weight="700" fill="${pcol}">現價 ${fmt(s.price)}</text>
+  </svg>`;
+
+  return `<div class="ladder">
+    <div class="ladder-verdict ${v.vcls}">${v.arr}：${v.posTxt}。${v.advice}</div>
+    ${svg}
+    <div class="cap">尺上每個點是一條均線的價位；均線在現價左邊＝比現價低（偏多），在右邊＝比現價高（偏空）。</div>
+  </div>`;
+}
+
+function renderStocks(){
+  const box = document.getElementById("stocks");
+  const watch = getWatch().map(byCode).filter(Boolean);
+  if(!watch.length){
+    box.innerHTML = `<div class="empty">還沒有自選股。<br>點上面的「＋ 新增股票」加幾檔吧。</div>`;
+    return;
+  }
+  box.innerHTML = watch.map((s,idx)=>{
+    const a = analyze(s);
+    const v = maVerdict(s);
+    const chg = s.price - s.prev;
+    const c = dirClass(chg);
+    const b = dirBg(chg);
+    const ms = metricMeanings(s);
+    const detailHtml = ms.map(mm=>`
+      <div class="metric">
+        <div class="m-head"><span class="m-name">${mm.name}</span><span class="m-val">${mm.val}</span></div>
+        <div class="m-mean">${mm.mean}</div>
+      </div>`).join("");
+    return `<div class="stock" id="s-${idx}">
+      <div class="row1" data-i="${idx}">
+        <div class="lead">
+          <span class="nm">${s.name}</span>
+          <span class="code">${s.code}</span>
+          <span class="tag ${a.tagCls}">${a.tag}</span>
+          <span class="arr ${v.vcls}" title="四條均線排列">${v.label}</span>
+          <span class="spark">${sparkline(s.spark, 64, 24, chg>=0)}</span>
+        </div>
+        <div class="px">
+          <span class="price ${c}">${fmt(s.price)}</span>
+          <span class="chg ${c} ${b}">${signAmt(chg)}（${fmtPct(a.pct)}）</span>
+        </div>
+      </div>
+      <div class="note">今天<b class="${chg>=0?'hl-up':'hl-down'}">${a.dir} ${fmtPct(a.pct)}</b>，${a.maText}，${a.volText}。</div>
+      <div class="detail">
+        ${maLadder(s)}
+        ${detailHtml}
+        <div class="calc">
+          <div class="calc-h">試算你的買賣價：輸入一個價格，看看合不合理、在歷史區間的哪裡</div>
+          <div class="calc-in">
+            <input type="number" class="calcPrice" inputmode="decimal" placeholder="例如 ${s.price.toFixed(0)}">
+            <button class="calcBtn buy" data-code="${s.code}" data-side="buy">我想買</button>
+            <button class="calcBtn sell" data-code="${s.code}" data-side="sell">我想賣</button>
+          </div>
+          <div class="calc-out" id="calc-${s.code}"></div>
+        </div>
+        <button class="delBtn" data-code="${s.code}">✕ 從自選股移除這檔</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  box.querySelectorAll(".row1").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      document.getElementById("s-"+el.dataset.i).classList.toggle("open");
+    });
+  });
+  box.querySelectorAll(".delBtn").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      e.stopPropagation();
+      const code = btn.dataset.code;
+      const s = byCode(code);
+      if(!s) return;
+      if(confirm(`要把「${s.name} ${code}」從自選股移除嗎？`)){
+        setWatch(getWatch().filter(c=>c!==code));
+        renderStocks(); renderSummary(); renderAddList();
+      }
+    });
+  });
+  box.querySelectorAll(".calcBtn").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      e.stopPropagation();
+      const code = btn.dataset.code, side = btn.dataset.side;
+      const s = byCode(code); if(!s) return;
+      const wrap = btn.closest(".calc");
+      const inp = wrap ? wrap.querySelector(".calcPrice") : null;
+      const P = inp ? parseFloat(inp.value) : NaN;
+      const out = document.getElementById("calc-"+code);
+      if(!out) return;
+      if(!isFinite(P) || P<=0){ out.innerHTML = '<span class="cl">請先在上面輸入一個價格（例如 '+s.price.toFixed(0)+'）。</span>'; return; }
+      const r = calcPrice(s, P, side);
+      out.innerHTML = `<div class="calc-verdict"><span class="prob ${r.probCls}">成交機率：${r.prob}</span><span class="chip ${r.cls}">價格：${r.chip}</span></div>` + r.lines.map(l=>`<span class="cl">${l}</span>`).join("");
+    });
+  });
+}
+
+function renderAddList(){
+  const listEl = document.getElementById("addList");
+  const kw = (document.getElementById("search").value||"").trim().toLowerCase();
+  const watch = getWatch();
+  const avail = DB.filter(s=>!watch.includes(s.code))
+    .filter(s=> !kw || s.name.toLowerCase().includes(kw) || s.code.includes(kw));
+  if(!avail.length){
+    listEl.innerHTML = `<div class="add-empty">${kw?"找不到符合的股票":"所有股票都已經在自選股裡了"}</div>`;
+    return;
+  }
+  listEl.innerHTML = avail.map(s=>{
+    const c = dirClass(s.price-s.prev);
+    return `<div class="add-item" data-code="${s.code}">
+      <span class="nm">${s.name}</span><span class="code">${s.code}</span>
+      <span class="px ${c}">${fmt(s.price)}</span>
+      <span class="plus">＋</span>
+    </div>`;
+  }).join("");
+  listEl.querySelectorAll(".add-item").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const code = el.dataset.code;
+      const w = getWatch();
+      if(!w.includes(code)){ w.push(code); setWatch(w); }
+      renderStocks(); renderSummary(); renderAddList();
+    });
+  });
+}
+
+function renderRanks(){
+  const sorted = DB.map(s=>({name:s.name, code:s.code, pct:pctOf(s)}));
+  const ups = [...sorted].sort((a,b)=>b.pct-a.pct).slice(0,5);
+  const downs = [...sorted].sort((a,b)=>a.pct-b.pct).slice(0,3);
+  const row = r=>`<div class="rank-item"><span class="nm">${r.name}</span><span class="code">${r.code}</span><span class="pct ${dirClass(r.pct)}">${fmtPct(r.pct)}</span></div>`;
+  document.getElementById("top-up").innerHTML = `<h2 class="sec" style="color:var(--up)">▲ 漲幅前段班</h2>` + ups.map(row).join("");
+  document.getElementById("top-down").innerHTML = `<h2 class="sec" style="color:var(--down)">▼ 跌幅前段班</h2>` + downs.map(row).join("");
+}
+
+function renderLegal(){
+  const total = LEGAL.reduce((a,b)=>a+b.amt,0);
+  const cells = LEGAL.map(l=>{
+    const c = dirClass(l.amt);
+    const sign = l.amt>=0 ? "買超" : "賣超";
+    const abs = Math.abs(l.amt);
+    let scale;
+    if(l.who==="外資") scale = abs>=100?"明顯":(abs>=50?"偏向":"小幅");
+    else if(l.who==="投信") scale = abs>=30?"明顯":(abs>=10?"偏向":"小幅");
+    else scale = abs>=20?"明顯":(abs>=5?"偏向":"小幅");
+    return `<div class="cell">
+      <div class="who">${l.who}</div>
+      <div class="amt ${c}">${sign} ${abs.toFixed(1)} 億</div>
+      <div class="who">${scale}${l.amt>=0?"買進":"賣出"}</div>
+    </div>`;
+  }).join("");
+  const tc = dirClass(total);
+  const tsign = total>=0 ? "買超" : "賣超";
+  const tmean = total>=0
+    ? `今天三大法人<b>合計買超 ${Math.abs(total).toFixed(1)} 億</b>，代表外資、投信、自營商加起來是「買的比賣的多」，大戶資金偏多，對股價比較有支撐。`
+    : `今天三大法人<b>合計賣超 ${Math.abs(total).toFixed(1)} 億</b>，代表加起來是「賣的比買的多」，大戶資金偏空，股價比較有壓力。`;
+  document.getElementById("legal").innerHTML = cells +
+    `<div class="legal-total">${tmean}</div>`;
+}
+
+function renderFooter(){
+  document.getElementById("footer").innerHTML = `
+    <p id="srcLine">資料來源：載入中…</p>
+    <p>資料來源：Yahoo Finance（即時價與近一年日線）＋ 台灣證券交易所（三大法人）。台股一般漲跌幅上限 ±10%。</p>
+    <p>提醒：年線（240 日）建議用「還原股價」看，因為每年除息會讓股價跳空，沒還原的長期均線會失真。</p>
+    <p>免責聲明：投資有風險，本工具只做整理和白話說明，不構成買賣建議。</p>`;
+}
+
+function initFont(){
+  const box = document.getElementById("fsbtns");
+  const apply = v=>{
+    document.documentElement.classList.remove("fs-big","fs-bigger");
+    if(v==="big") document.documentElement.classList.add("fs-big");
+    if(v==="bigger") document.documentElement.classList.add("fs-bigger");
+    box.querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.fs===v));
+  };
+  let saved=null; try{ saved=localStorage.getItem(K+"-fs"); }catch(e){}
+  apply(saved||"0");
+  box.querySelectorAll("button").forEach(b=>{
+    b.addEventListener("click", ()=>{ try{localStorage.setItem(K+"-fs", b.dataset.fs);}catch(e){} apply(b.dataset.fs); });
+  });
+}
+
+function initAddPanel(){
+  const btn=document.getElementById("addBtn");
+  const panel=document.getElementById("addPanel");
+  const search=document.getElementById("search");
+  btn.addEventListener("click", ()=>{
+    const open = panel.hidden;
+    panel.hidden = !open;
+    btn.classList.toggle("on", open);
+    btn.textContent = open ? "收起" : "＋ 新增股票";
+    if(open){ renderAddList(); search.focus(); }
+  });
+  let t=null;
+  search.addEventListener("input", ()=>{ clearTimeout(t); t=setTimeout(renderAddList,120); });
+}
+
+renderIdx();
+renderSummary();
+renderStocks();
+renderRanks();
+renderLegal();
+renderFooter();
+initFont();
+initAddPanel();
+
+/* 載入真實行情 data.json（GitHub Pages 上會自動更新）；失敗則沿用示範數據 */
+(async function loadLive(){
+  try{
+    const res = await fetch("data.json", {cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const d = await res.json();
+    if(Array.isArray(d.stocks) && d.stocks.length){
+      DB = d.stocks;
+      if(d.index){ INDEX = d.index; if(Array.isArray(d.index.series) && d.index.series.length) indexSeries = d.index.series; }
+      if(Array.isArray(d.legal) && d.legal.length) LEGAL = d.legal;
+      renderIdx(); renderSummary(); renderStocks(); renderRanks(); renderLegal();
+      const badge = document.getElementById("dataBadge");
+      if(badge) badge.textContent = (d.session || "即時") + " " + String(d.updated || "").slice(-5);
+      const src = document.getElementById("srcLine");
+      if(src) src.innerHTML = `資料來源：Yahoo Finance（即時價與近一年日線）＋ 證交所（三大法人）。最後更新：<b>${d.updated || "—"}</b>（${d.session || ""}）`;
+    }
+  }catch(e){
+    console.warn("無法載入 data.json，沿用示範數據：", e.message);
+    const badge = document.getElementById("dataBadge");
+    if(badge) badge.textContent = "示範數據（未連線）";
+    const src = document.getElementById("srcLine");
+    if(src) src.textContent = "目前顯示示範數據（無法連到 data.json，需透過網站開啟才會抓真實行情）。";
+  }
+})();
+</script>
+</body>
+</html>
