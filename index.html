@@ -672,10 +672,16 @@ function renderAddList(){
   const listEl = document.getElementById("addList");
   const kw = (document.getElementById("search").value||"").trim().toLowerCase();
   const watch = getWatch();
-  const avail = DB.filter(s=>!watch.includes(s.code))
-    .filter(s=> !kw || s.name.toLowerCase().includes(kw) || s.code.includes(kw));
+  const matched = DB.filter(s=> !kw || s.name.toLowerCase().includes(kw) || s.code.includes(kw));
+  const avail = matched.filter(s=> !watch.includes(s.code));
+  if(!matched.length){
+    listEl.innerHTML = `<div class="add-empty">沒收錄「${kw}」這檔。<br>目前收錄 ${DB.length} 檔（成交金額前段班）；若要這檔，把代號告訴我就幫你加。</div>`;
+    return;
+  }
   if(!avail.length){
-    listEl.innerHTML = `<div class="add-empty">${kw?"找不到符合的股票":"所有股票都已經在自選股裡了"}</div>`;
+    listEl.innerHTML = kw
+      ? `<div class="add-empty">「${matched[0].name} ${matched[0].code}」已經在自選股裡了。</div>`
+      : `<div class="add-empty">全部收錄的股票都已在自選股。</div>`;
     return;
   }
   listEl.innerHTML = avail.map(s=>{
