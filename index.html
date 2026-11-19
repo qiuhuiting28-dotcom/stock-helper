@@ -390,17 +390,20 @@ function tradeVsNow(t, s){
   const abs = Math.abs(pct).toFixed(2);
   const good = pct >= 0;
   const money = (t.lots>0) ? Math.round(Math.abs(s.price - t.price)*t.lots*1000).toLocaleString("zh-TW") : null;
+  const flat = Math.abs(pct) < 0.005;
   let txt;
   if(t.side==="buy"){
-    txt = good
-      ? `現在 ${fmt(s.price)}，比你買的 ${fmt(t.price)} 高 ${abs}%，帳面上是賺的。`
-      : `現在 ${fmt(s.price)}，比你買的 ${fmt(t.price)} 低 ${abs}%，帳面上是賠的。`;
-    if(money) txt += ` 以 ${lotsTxt(t.lots)}算，大約${good?"賺":"賠"} ${money} 元。`;
+    txt = flat
+      ? `現在 ${fmt(s.price)}，跟你買的 ${fmt(t.price)} 一樣，還沒賺沒賠。`
+      : (good ? `現在 ${fmt(s.price)}，比你買的 ${fmt(t.price)} 高 ${abs}%，帳面上是賺的。`
+              : `現在 ${fmt(s.price)}，比你買的 ${fmt(t.price)} 低 ${abs}%，帳面上是賠的。`);
+    if(money && !flat) txt += ` 以 ${lotsTxt(t.lots)}算，大約${good?"賺":"賠"} ${money} 元。`;
   }else{
-    txt = good
-      ? `現在 ${fmt(s.price)}，比你賣的 ${fmt(t.price)} 低 ${abs}%，這筆賣得不錯。`
-      : `現在 ${fmt(s.price)}，比你賣的 ${fmt(t.price)} 高 ${abs}%，賣早了一點。`;
-    if(money) txt += ` 以 ${lotsTxt(t.lots)}算，差額約 ${money} 元。`;
+    txt = flat
+      ? `現在 ${fmt(s.price)}，跟你賣的 ${fmt(t.price)} 一樣，差不多。`
+      : (good ? `現在 ${fmt(s.price)}，比你賣的 ${fmt(t.price)} 低 ${abs}%，這筆賣得不錯。`
+              : `現在 ${fmt(s.price)}，比你賣的 ${fmt(t.price)} 高 ${abs}%，賣早了一點。`);
+    if(money && !flat) txt += ` 以 ${lotsTxt(t.lots)}算，差額約 ${money} 元。`;
   }
   return {txt, cls: good?"up":"down", pct};
 }
