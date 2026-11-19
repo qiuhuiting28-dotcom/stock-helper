@@ -176,6 +176,37 @@
   .ladder svg{margin-top:2px}
   .ladder .cap{font-size:.72rem; color:var(--muted); margin-top:4px; line-height:1.5}
 
+  /* 我的買賣紀錄 */
+  .trades{margin-top:14px; padding:14px; background:#fff; border:1px solid var(--line); border-radius:12px}
+  .tr-sum{font-size:.84rem; color:var(--ink-soft); line-height:1.6; margin:-2px 0 10px}
+  .tr-sum b{color:var(--navy)}
+  .tr-form{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px}
+  .tr-form select,.tr-form input{font-size:.92rem; padding:10px 11px; border:1px solid var(--line); border-radius:9px; font-family:inherit; color:var(--ink); background:#fff}
+  .tr-form select:focus,.tr-form input:focus{outline:2px solid var(--navy); outline-offset:1px}
+  .tr-form .trSide{flex:0 0 auto}
+  .tr-form .trPrice{flex:1 1 88px; min-width:0}
+  .tr-form .trLots{flex:0 0 92px}
+  .tr-form .trAt{flex:1 1 196px; min-width:0}
+  .tr-form .trAdd{font-size:.9rem; font-weight:700; padding:10px 16px; border-radius:9px; border:none; background:var(--navy); color:#fff; cursor:pointer}
+  .tr-hint{font-size:.74rem; color:var(--muted); margin-top:8px; line-height:1.55}
+  .tr-empty{font-size:.84rem; color:var(--muted); padding:6px 0; line-height:1.6}
+  .tr-row{padding:10px 0; border-top:1px dashed var(--line)}
+  .tr-row:first-child{border-top:none}
+  .tr-top{display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; font-size:.9rem}
+  .tr-px{font-size:1rem; font-weight:800}
+  .tr-lots{color:var(--ink-soft); font-size:.8rem}
+  .tr-when{color:var(--muted); font-size:.78rem; white-space:nowrap}
+  .tr-nm{font-weight:700}
+  .tr-code{color:var(--muted); font-size:.74rem}
+  .tr-del{margin-left:auto; font-size:.74rem; padding:4px 11px; border-radius:7px; border:1px solid var(--line); background:#fff; color:var(--muted); cursor:pointer}
+  .tr-del:hover{color:var(--down); border-color:#cfe0d3; background:var(--down-bg)}
+  .tr-note{font-size:.84rem; color:var(--ink-soft); line-height:1.55; margin-top:3px}
+  .side{font-size:.72rem; font-weight:800; padding:2px 9px; border-radius:999px; white-space:nowrap}
+  .side.buy{background:#e8eef5; color:var(--navy)}
+  .side.sell{background:#fdf1e3; color:var(--gold)}
+  .tr-logsum{font-size:.84rem; color:var(--ink-soft); margin-bottom:4px; line-height:1.6}
+  .tr-logsum b{color:var(--navy)}
+
   @media(max-width:600px){
     html{font-size:18px}
     html.fs-big{font-size:21px}
@@ -218,12 +249,21 @@
       <h2 class="sec" style="margin:0">自選股</h2>
       <button class="addBtn" id="addBtn">＋ 新增股票</button>
     </div>
-    <p class="sec-desc">點股票展開：每項數字都有白話說明，還能試算你自己的買賣價</p>
+    <p class="sec-desc">點股票展開：每項數字都有白話說明，還能試算你的買賣價、記下你自己買過賣過的價位</p>
     <div class="add-panel" id="addPanel" hidden>
       <input id="search" type="search" placeholder="輸入名稱或代號，例如 台積電 或 2330" autocomplete="off">
       <div class="add-list" id="addList"></div>
     </div>
     <div id="stocks"></div>
+  </div>
+
+  <div class="card">
+    <div class="watch-head">
+      <h2 class="sec" style="margin:0">我的交易紀錄</h2>
+      <button class="addBtn" id="trExport">匯出 CSV</button>
+    </div>
+    <p class="sec-desc">你自己記下的買進、賣出價和時間，全都存在這台裝置的瀏覽器裡，不會上傳。換裝置或清掉瀏覽器資料就看不到了，重要的請按上面匯出備份。</p>
+    <div id="tradeLog"></div>
   </div>
 
   <div class="card">
@@ -314,6 +354,183 @@ const dirBg = v => v>=0 ? "up-bg" : "down-bg";
 const pctOf = s => (s.price - s.prev)/s.prev*100;
 const byCode = c => DB.find(x=>x.code===c);
 const gapPct = (a,b) => (a-b)/b*100;
+
+/* ── 我的買賣紀錄：存在自己的瀏覽器，不上傳 ───────────────── */
+function getTrades(){
+  try{
+    const raw = localStorage.getItem(K+"-trades");
+    const a = raw ? JSON.parse(raw) : [];
+    return Array.isArray(a) ? a.filter(t=>t && t.code && isFinite(t.price) && t.price>0) : [];
+  }catch(e){ return []; }
+}
+function setTrades(a){
+  try{ localStorage.setItem(K+"-trades", JSON.stringify(a)); return true; }
+  catch(e){ alert("這台裝置不能存紀錄（瀏覽器把網站資料關掉了），這次的紀錄不會留下來。"); return false; }
+}
+function tradeId(){ return "t"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function tradesOf(code){
+  return getTrades().filter(t=>t.code===code).sort((a,b)=> String(b.at).localeCompare(String(a.at)));
+}
+function fmtAt(at){
+  const m = String(at||"").match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  return m ? `${m[1]}/${m[2]}/${m[3]} ${m[4]}:${m[5]}` : (at||"—");
+}
+function nowLocal(){
+  const d = new Date(), p = n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function lotsTxt(l){
+  if(l==null || !isFinite(l) || l<=0) return "";
+  return (Math.round(l*1000)/1000).toLocaleString("zh-TW") + " 張";
+}
+/* 把你的紀錄跟今天的價對照，用白話講結果 */
+function tradeVsNow(t, s){
+  if(!s || !isFinite(s.price) || !s.price) return {txt:"今天沒有這檔的報價，先記著，等有報價再看。"};
+  const pct = t.side==="sell" ? (t.price - s.price)/s.price*100 : (s.price - t.price)/t.price*100;
+  const abs = Math.abs(pct).toFixed(2);
+  const good = pct >= 0;
+  const money = (t.lots>0) ? Math.round(Math.abs(s.price - t.price)*t.lots*1000).toLocaleString("zh-TW") : null;
+  let txt;
+  if(t.side==="buy"){
+    txt = good
+      ? `現在 ${fmt(s.price)}，比你買的 ${fmt(t.price)} 高 ${abs}%，帳面上是賺的。`
+      : `現在 ${fmt(s.price)}，比你買的 ${fmt(t.price)} 低 ${abs}%，帳面上是賠的。`;
+    if(money) txt += ` 以 ${lotsTxt(t.lots)}算，大約${good?"賺":"賠"} ${money} 元。`;
+  }else{
+    txt = good
+      ? `現在 ${fmt(s.price)}，比你賣的 ${fmt(t.price)} 低 ${abs}%，這筆賣得不錯。`
+      : `現在 ${fmt(s.price)}，比你賣的 ${fmt(t.price)} 高 ${abs}%，賣早了一點。`;
+    if(money) txt += ` 以 ${lotsTxt(t.lots)}算，差額約 ${money} 元。`;
+  }
+  return {txt, cls: good?"up":"down", pct};
+}
+function tradeRowHtml(t, s){
+  const v = tradeVsNow(t, s);
+  return `<div class="tr-row">
+    <div class="tr-top">
+      <span class="side ${t.side==="buy"?"buy":"sell"}">${t.side==="buy"?"買進":"賣出"}</span>
+      <b class="tr-px">${fmt(t.price)}</b>
+      ${lotsTxt(t.lots)?`<span class="tr-lots">${lotsTxt(t.lots)}</span>`:""}
+      <span class="tr-when">${fmtAt(t.at)}</span>
+      <button class="tr-del" data-id="${t.id}" title="刪掉這筆">刪</button>
+    </div>
+    <div class="tr-note">${v.txt}</div>
+  </div>`;
+}
+function tradeRowsHtml(code, s){
+  const arr = tradesOf(code);
+  if(!arr.length) return `<div class="tr-empty">這檔還沒有紀錄。上面填好成交價和時間，按「記錄」就會存起來。</div>`;
+  return arr.map(t=>tradeRowHtml(t, s)).join("");
+}
+function tradeSumHtml(code){
+  const arr = tradesOf(code);
+  if(!arr.length) return "這檔還沒有紀錄。";
+  const b = arr.filter(t=>t.side==="buy").length;
+  const last = arr[0];
+  return `這檔記了 <b>${arr.length}</b> 筆（買 ${b}、賣 ${arr.length-b}）。最近一次：<b>${fmtAt(last.at)}</b> ${last.side==="buy"?"買":"賣"} <b>${fmt(last.price)}</b>${last.lots>0?`（${lotsTxt(last.lots)}）`:""}。`;
+}
+function renderTradeLog(){
+  const box = document.getElementById("tradeLog");
+  if(!box) return;
+  const all = getTrades().sort((a,b)=> String(b.at).localeCompare(String(a.at)));
+  if(!all.length){
+    box.innerHTML = `<div class="empty">還沒有任何紀錄。<br>上面自選股點開，在「我的買賣紀錄」裡填價格和時間就會存進來。</div>`;
+    return;
+  }
+  const b = all.filter(t=>t.side==="buy").length;
+  box.innerHTML = `<div class="tr-logsum">共 <b>${all.length}</b> 筆：買 <b>${b}</b> 筆、賣 <b>${all.length-b}</b> 筆。新的排在最上面。</div>` +
+    all.map(t=>{
+      const v = tradeVsNow(t, byCode(t.code));
+      return `<div class="tr-row">
+        <div class="tr-top">
+          <span class="tr-nm">${t.name||t.code}</span><span class="tr-code">${t.code}</span>
+          <span class="side ${t.side==="buy"?"buy":"sell"}">${t.side==="buy"?"買進":"賣出"}</span>
+          <b class="tr-px">${fmt(t.price)}</b>
+          ${lotsTxt(t.lots)?`<span class="tr-lots">${lotsTxt(t.lots)}</span>`:""}
+          <span class="tr-when">${fmtAt(t.at)}</span>
+          <button class="tr-del" data-id="${t.id}">刪</button>
+        </div>
+        <div class="tr-note">${v.txt}</div>
+      </div>`;
+    }).join("");
+}
+/* 只重畫某一檔的紀錄區，避免整頁重畫把展開的內容收起來 */
+function refreshTrades(code){
+  const list = document.getElementById("trl-"+code);
+  if(list) list.innerHTML = tradeRowsHtml(code, byCode(code));
+  const sum = document.querySelector('.tr-sum[data-code="'+code+'"]');
+  if(sum) sum.innerHTML = tradeSumHtml(code);
+  renderTradeLog();
+}
+function initTrades(){
+  document.addEventListener("click", e=>{
+    const btn = e.target.closest ? e.target.closest(".trAdd") : null;
+    if(!btn) return;
+    e.stopPropagation();
+    const code = btn.dataset.code, s = byCode(code);
+    const form = btn.closest(".tr-form");
+    if(!form) return;
+    const priceEl = form.querySelector(".trPrice");
+    const P = parseFloat(priceEl.value);
+    if(!isFinite(P) || P <= 0){
+      alert("請先填成交價" + (s ? "（現在大約 " + s.price.toFixed(2) + "）" : "") + "。");
+      if(priceEl) priceEl.focus();
+      return;
+    }
+    if(s && s.price && Math.abs(P - s.price)/s.price > 0.3){
+      const d = Math.abs((P - s.price)/s.price*100).toFixed(0);
+      if(!confirm(`你填的 ${fmt(P)} 跟現在的 ${fmt(s.price)} 差 ${d}%，差很多。\n是打錯了嗎？按「確定」就照你填的存。`)) return;
+    }
+    const lotsRaw = form.querySelector(".trLots").value.trim();
+    const lots = lotsRaw==="" ? null : parseFloat(lotsRaw);
+    if(lots !== null && (!isFinite(lots) || lots <= 0)){
+      alert("張數要填大於 0 的數字；不想算金額就把它留空。");
+      return;
+    }
+    const at = form.querySelector(".trAt").value || nowLocal();
+    const side = form.querySelector(".trSide").value === "sell" ? "sell" : "buy";
+    const all = getTrades();
+    all.push({id:tradeId(), code, name:(s?s.name:""), side, price:Math.round(P*100)/100, lots, at});
+    if(!setTrades(all)) return;
+    if(priceEl) priceEl.value = "";
+    const lotsEl = form.querySelector(".trLots");
+    if(lotsEl) lotsEl.value = "";
+    const atEl = form.querySelector(".trAt");
+    if(atEl) atEl.value = nowLocal();
+    refreshTrades(code);
+  });
+
+  document.addEventListener("click", e=>{
+    const del = e.target.closest ? e.target.closest(".tr-del") : null;
+    if(!del) return;
+    e.stopPropagation();
+    const t = getTrades().find(x=>x.id===del.dataset.id);
+    if(!t) return;
+    if(!confirm(`刪掉這筆紀錄？\n${fmtAt(t.at)} ${t.side==="buy"?"買":"賣"} ${t.name||t.code} ${fmt(t.price)}${t.lots>0?"（"+lotsTxt(t.lots)+"）":""}`)) return;
+    setTrades(getTrades().filter(x=>x.id!==t.id));
+    refreshTrades(t.code);
+  });
+
+  const exp = document.getElementById("trExport");
+  if(exp) exp.addEventListener("click", e=>{
+    e.stopPropagation();
+    const all = getTrades().sort((a,b)=> String(a.at).localeCompare(String(b.at)));
+    if(!all.length){ alert("還沒有紀錄可以匯出。"); return; }
+    const q = v => '"' + String(v==null?"":v).replace(/"/g,'""') + '"';
+    const rows = [["時間","代號","名稱","買賣","價格","張數","金額(元)"].join(",")]
+      .concat(all.map(t=>[
+        fmtAt(t.at), t.code, t.name||"", t.side==="buy"?"買進":"賣出",
+        t.price, t.lots==null?"":t.lots,
+        (t.lots>0 ? Math.round(t.price*t.lots*1000) : "")
+      ].map(q).join(",")));
+    const blob = new Blob(["\ufeff"+rows.join("\r\n")], {type:"text/csv;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "我的買賣紀錄_" + new Date().toISOString().slice(0,10).replace(/-/g,"") + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  });
+}
 
 function getWatch(){
   try{
@@ -629,6 +846,19 @@ function renderStocks(){
           </div>
           <div class="calc-out" id="calc-${s.code}"></div>
         </div>
+        <div class="trades">
+          <div class="calc-h">我的買賣紀錄（這檔）</div>
+          <div class="tr-sum" data-code="${s.code}">${tradeSumHtml(s.code)}</div>
+          <div class="tr-form" data-code="${s.code}">
+            <select class="trSide"><option value="buy">買進</option><option value="sell">賣出</option></select>
+            <input class="trPrice" type="number" inputmode="decimal" step="0.01" placeholder="成交價">
+            <input class="trLots" type="number" inputmode="decimal" step="0.1" placeholder="張數（可留空）">
+            <input class="trAt" type="datetime-local" value="${nowLocal()}">
+            <button class="trAdd" data-code="${s.code}">記錄</button>
+          </div>
+          <div class="tr-list" id="trl-${s.code}">${tradeRowsHtml(s.code, s)}</div>
+          <div class="tr-hint">記下你買進、賣出的價格和時間，之後回頭看就知道當時買在哪。只想記價位：張數留空就好；填了張數，會順便算成錢。時間預設是現在，要補記以前的可自己改。</div>
+        </div>
         <button class="delBtn" data-code="${s.code}">✕ 從自選股移除這檔</button>
       </div>
     </div>`;
@@ -782,6 +1012,8 @@ renderLegal();
 renderFooter();
 initFont();
 initAddPanel();
+renderTradeLog();
+initTrades();
 
 /* 載入真實行情 data.json（GitHub Pages 上會自動更新）；失敗則沿用示範數據 */
 (async function loadLive(){
@@ -793,7 +1025,7 @@ initAddPanel();
       DB = d.stocks;
       if(d.index){ INDEX = d.index; if(Array.isArray(d.index.series) && d.index.series.length) indexSeries = d.index.series; }
       if(Array.isArray(d.legal) && d.legal.length) LEGAL = d.legal;
-      renderIdx(); renderSummary(); renderStocks(); renderRanks(); renderLegal();
+      renderIdx(); renderSummary(); renderStocks(); renderRanks(); renderLegal(); renderTradeLog();
       const badge = document.getElementById("dataBadge");
       if(badge) badge.textContent = (d.session || "即時") + " " + String(d.updated || "").slice(-5);
       const src = document.getElementById("srcLine");
