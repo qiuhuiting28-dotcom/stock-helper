@@ -31,12 +31,14 @@ jobs:
           python-version: '3.12'
       - name: Fetch market data
         run: |
+          SCHED="${{ github.event.schedule }}"
           MODE="${{ github.event.inputs.mode }}"
           if [ -z "$MODE" ]; then
-            if [ "${{ github.event.schedule }}" = "*/5 1-5 * * 1-5" ]; then
-              MODE=quick
-            else
+            # 只有兩個完整更新的時段跑 full，其餘排程一律 quick（寧可多抓即時價，不要每 5 分鐘重算整本）
+            if [ "$SCHED" = "3 1 * * 1-5" ] || [ "$SCHED" = "43 5 * * 1-5" ] || [ -z "$SCHED" ]; then
               MODE=full
+            else
+              MODE=quick
             fi
           fi
           echo "mode=$MODE"
