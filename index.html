@@ -311,6 +311,7 @@
 "use strict";
 const K = "taiwan-stock-v2";
 let LIVE_OK = false;      // 是否已載入真實行情（false 才在畫面上標「示範」）
+let SHOWN_UPDATED = "";  // 畫面上目前顯示的資料時間（取兩份中較新者）
 let BASE_SERIES = null;   // data.json 的 30 日指數序列
 
 let INDEX = { value:22734.58, prevClose:22590.22, chg:144.36, chgPct:0.64, volume:"3,842 億", time:"13:30 收盤" };
@@ -1092,6 +1093,7 @@ function paintMeta(merged){
   /* 兩份資料取「時間比較新的」那一份來顯示，免得即時價比每日資料舊時顯示成舊的 */
   const useQ = !!(QUOTES_META && (!DATA_META || QUOTES_META.updated >= DATA_META.updated));
   const eff = (useQ ? QUOTES_META : DATA_META) || {};
+  SHOWN_UPDATED = eff.updated || "";
   const badge = document.getElementById("dataBadge");
   if(badge) badge.textContent = (eff.session || "即時") + " " + fmtUpdated(eff.updated);
   const note = document.getElementById("refreshNote");
@@ -1196,7 +1198,7 @@ async function refreshQuotes(opts){
     const {d, q} = await loadQuotes();
     applyData(d, q);
     restoreUI(keep);
-    if(!silent) flash("已更新，報價時間 " + fmtUpdated((q || d).updated));
+    if(!silent) flash("已更新，報價時間 " + fmtUpdated(SHOWN_UPDATED));
   }catch(e){
     console.warn("更新失敗：", e.message);
     if(!silent) flash("這次抓不到最新資料（" + e.message + "），先沿用現在的數字。", true);
