@@ -375,6 +375,7 @@ let LEGAL = [{who:"外資",amt:+152.4},{who:"投信",amt:+38.6},{who:"自營商"
 const fmt = n => n.toLocaleString("zh-TW",{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtPct = p => (p>=0?"+":"") + p.toFixed(2) + "%";
 const signAmt = v => (v>=0?"+":"") + v.toFixed(1);
+const signBig = v => (v>=0?"+":"") + v.toLocaleString("zh-TW",{minimumFractionDigits:1,maximumFractionDigits:1});
 const dirClass = v => v>=0 ? "up" : "down";
 const dirBg = v => v>=0 ? "up-bg" : "down-bg";
 const pctOf = s => (s.price - s.prev)/s.prev*100;
@@ -768,7 +769,7 @@ function renderIdx(){
   document.getElementById("idx").innerHTML = `
     <div><div class="big ${c}">${fmt(i.value)}</div><div class="meta">加權指數</div></div>
     <div>
-      <span class="chg ${c} ${b}">${signAmt(i.chg)}（${fmtPct(i.chgPct)}）</span>
+      <span class="chg ${c} ${b}">${signBig(i.chg)}（${fmtPct(i.chgPct)}）</span>
       <div class="meta" style="margin-top:6px">成交值 ${i.volume}</div>
     </div>
     <div class="meta right" style="margin-left:auto">昨收 ${fmt(i.prevClose)}<br>紅＝漲　綠＝跌</div>`;
