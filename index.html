@@ -1089,13 +1089,15 @@ function mergeQuotes(q){
 }
 
 function paintMeta(merged){
-  const eff = QUOTES_META || DATA_META || {};
+  /* 兩份資料取「時間比較新的」那一份來顯示，免得即時價比每日資料舊時顯示成舊的 */
+  const useQ = !!(QUOTES_META && (!DATA_META || QUOTES_META.updated >= DATA_META.updated));
+  const eff = (useQ ? QUOTES_META : DATA_META) || {};
   const badge = document.getElementById("dataBadge");
   if(badge) badge.textContent = (eff.session || "即時") + " " + fmtUpdated(eff.updated);
   const note = document.getElementById("refreshNote");
   if(note){
     const t = fmtUpdated(eff.updated);
-    note.innerHTML = QUOTES_META
+    note.innerHTML = useQ
       ? `報價時間 <b>${t}</b>（${eff.session || ""}）${merged ? `　已套用即時價 ${merged} 檔` : ""}　盤中每 5 分鐘自動更新；按右上「🔄 更新報價」可馬上抓最新一份。`
       : `資料時間 <b>${t}</b>（${eff.session || ""}）　按右上「🔄 更新報價」抓最新一份。`;
   }
