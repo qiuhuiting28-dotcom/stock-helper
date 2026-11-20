@@ -1,19 +1,25 @@
 name: update-data
 
-# 台股交易日：週一～週五
-# 09:05 台北 = 01:05 UTC；13:45 台北 = 05:45 UTC
+# 台北時間 = UTC+8
+#   01:00–05:55 UTC（09:00–13:55 台北）→ 每 5 分鐘抓即時報價（quotes.json）
+#   01:03 UTC（09:03）與 05:43 UTC（13:43）→ 完整重算（data.json：日線、均線、法人）
 on:
   schedule:
-    - cron: '5 1 * * 1-5'
-    - cron: '45 5 * * 1-5'
+    - cron: '*/5 1-5 * * 1-5'
+    - cron: '3 1 * * 1-5'
+    - cron: '43 5 * * 1-5'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'quick（只抓即時價）或 full（完整重算）'
+        default: 'full'
 
 permissions:
   contents: write
 
 concurrency:
   group: update-data
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   update:
@@ -24,12 +30,26 @@ jobs:
         with:
           python-version: '3.12'
       - name: Fetch market data
-        run: python update.py data.json
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          if [ -z "$MODE" ]; then
+            if [ "${{ github.event.schedule }}" = "*/5 1-5 * * 1-5" ]; then
+              MODE=quick
+            else
+              MODE=full
+            fi
+          fi
+          echo "mode=$MODE"
+          if [ "$MODE" = "quick" ]; then
+            python update.py --quick
+          else
+            python update.py data.json
+          fi
       - name: Commit if changed
         run: |
           git config user.name "stock-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data.json
+          git add -A
           if git diff --staged --quiet; then
             echo "no change"
           else

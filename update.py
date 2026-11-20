@@ -8,6 +8,7 @@
   價格/日線：Yahoo Finance chart（上市 .TW、上櫃 .TWO）
   三大法人：證交所 BFI82U
 用法：python update.py data.json [上市檔數=90] [上櫃檔數=30]
+      python update.py --quick        # 只抓即時價 → quotes.json
 """
 import json, ssl, sys, time, re, urllib.request, urllib.error
 from datetime import datetime, timezone, timedelta
@@ -166,7 +167,71 @@ def build_legal():
     except Exception as e:
         print("  [warn] 三大法人失敗：", e, file=sys.stderr); return []
 
+
+# ── 即時報價（證交所 MIS，一次請求抓全部代號）────────────────────────
+def mis_batch(codes):
+    """回傳 {代號: MIS 欄位dict}。上市先問 tse，沒回來的再問 otc。"""
+    out = {}
+    def ask(ex, group):
+        for i in range(0, len(group), 40):
+            chunk = group[i:i+40]
+            q = "|".join("%s_%s.tw" % (ex, c) for c in chunk)
+            url = ("https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + q +
+                   "&json=1&delay=0&_=" + str(int(time.time()*1000)))
+            try:
+                j = json.loads(http_get(url, insecure=True))
+            except Exception as e:
+                print("  [warn] MIS 失敗(%s)：%s" % (ex, e), file=sys.stderr); continue
+            for m in (j.get("msgArray") or []):
+                if m.get("c"): out[m["c"]] = m
+            time.sleep(0.3)
+    ask("tse", codes)
+    miss = [c for c in codes if c not in out]
+    if miss: ask("otc", miss)
+    return out
+
+def _f(m, k):
+    v = m.get(k)
+    try: return float(v)
+    except Exception: return None
+
+def quick_update(out_path="quotes.json", base_path="data.json"):
+    """只抓即時價（價格/昨收/開高低/成交量/指數），寫成小檔 quotes.json。
+    均線、區間、殖利率仍沿用 data.json 的每日完整資料。"""
+    d = json.load(open(base_path, encoding="utf-8"))
+    stocks = d.get("stocks", [])
+    codes = [s["code"] for s in stocks]
+    q = mis_batch(codes + ["t00"])
+    quotes, n = {}, 0
+    for s in stocks:
+        m = q.get(s["code"])
+        if not m: continue
+        z, y = _f(m, "z"), _f(m, "y")
+        if not z or not y: continue          # 還沒成交（z == "-"）
+        rec = {"price": r2(z), "prev": r2(y)}
+        for k, kk in (("open", "o"), ("high", "h"), ("low", "l")):
+            v = _f(m, kk)
+            if v: rec[k] = r2(v)
+        v = _f(m, "v")
+        if v is not None: rec["vol"] = int(round(v))
+        quotes[s["code"]] = rec; n += 1
+    idx = None
+    m = q.get("t00")
+    if m:
+        z, y = _f(m, "z"), _f(m, "y")
+        if z and y:
+            idx = {"value": r2(z), "prevClose": r2(y), "chg": r2(z - y), "chgPct": r2(pct(z, y)),
+                   "time": (m.get("t") or "").strip() or "—"}
+    now = datetime.now(tz=TZ); hh = now.hour * 60 + now.minute
+    session = "盤中" if 9*60 <= hh < 13*60+35 else ("收盤" if 13*60+35 <= hh < 15*60 else "非交易時段")
+    payload = {"updated": now.strftime("%Y-%m-%d %H:%M"), "session": session,
+               "index": idx, "quotes": quotes}
+    with open(out_path, "w", encoding="utf-8") as f: json.dump(payload, f, ensure_ascii=False)
+    print("寫出 %s：%d 檔即時報價（%s %s）" % (out_path, n, payload["updated"], session))
+
 def main():
+    if "--quick" in sys.argv:
+        quick_update(); return
     out_path=sys.argv[1] if len(sys.argv)>1 else "data.json"
     n_twse=int(sys.argv[2]) if len(sys.argv)>2 else TWSE_N
     n_tpex=int(sys.argv[3]) if len(sys.argv)>3 else TPEX_N

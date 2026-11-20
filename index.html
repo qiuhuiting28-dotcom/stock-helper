@@ -207,6 +207,25 @@
   .tr-logsum{font-size:.84rem; color:var(--ink-soft); margin-bottom:4px; line-height:1.6}
   .tr-logsum b{color:var(--navy)}
 
+  /* 更新報價 */
+  .hdr-actions{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+  .refreshBtn{
+    font-size:.86rem; font-weight:700; color:#fff; background:var(--navy);
+    border:none; border-radius:10px; padding:9px 16px; cursor:pointer; white-space:nowrap;
+  }
+  .refreshBtn:hover{filter:brightness(1.1)}
+  .refreshBtn:disabled{background:var(--muted); cursor:default}
+  .refresh-note{font-size:.76rem; color:var(--muted); margin:-8px 0 16px; line-height:1.55}
+  .refresh-note b{color:var(--navy)}
+  .toast{
+    position:fixed; left:50%; bottom:28px; transform:translate(-50%,14px);
+    background:var(--navy); color:#fff; font-size:.86rem; padding:11px 18px;
+    border-radius:11px; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;
+    max-width:88vw; text-align:center; z-index:99; box-shadow:0 8px 24px rgba(0,0,0,.18);
+  }
+  .toast.show{opacity:1; transform:translate(-50%,0)}
+  .toast.bad{background:#8a3a3a}
+
   @media(max-width:600px){
     html{font-size:18px}
     html.fs-big{font-size:21px}
@@ -228,14 +247,18 @@
       <span class="sub">每日看盤一頁</span>
       <span class="badge" id="dataBadge">示範數據</span>
     </div>
-    <div class="fsbtns" id="fsbtns">
-      <button data-fs="0" class="on">標準</button>
-      <button data-fs="big">大</button>
-      <button data-fs="bigger">特大</button>
+    <div class="hdr-actions">
+      <button class="refreshBtn" id="refreshBtn" title="馬上抓最新的即時報價">🔄 更新報價</button>
+      <div class="fsbtns" id="fsbtns">
+        <button data-fs="0" class="on">標準</button>
+        <button data-fs="big">大</button>
+        <button data-fs="bigger">特大</button>
+      </div>
     </div>
   </header>
 
   <div class="summary" id="summary"></div>
+  <p class="refresh-note" id="refreshNote"></p>
 
   <div class="card">
     <h2 class="sec">大盤指數（加權指數）</h2>
@@ -1018,30 +1041,167 @@ initAddPanel();
 renderTradeLog();
 initTrades();
 
-/* 載入真實行情 data.json（GitHub Pages 上會自動更新）；失敗則沿用示範數據 */
+/* ── 行情載入／更新 ─────────────────────────────────────── */
+let DATA_META = null;     // data.json：每日完整資料
+let QUOTES_META = null;   // quotes.json：即時報價（每 5 分鐘更新）
+const AUTO_MS = 5 * 60 * 1000;
+
+function fmtUpdated(v){
+  const m = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/);
+  return m ? `${+m[2]}/${+m[3]} ${m[4]}` : (v ? String(v) : "—");
+}
+
+/* 把即時價併進 DB：只換價格與量，均線、區間、殖利率不動 */
+function mergeQuotes(q){
+  if(!q || !q.quotes) return 0;
+  let n = 0;
+  DB.forEach(s=>{
+    const r = q.quotes[s.code];
+    if(!r) return;
+    if(r.price > 0) s.price = r.price;
+    if(r.prev > 0) s.prev = r.prev;
+    ["open","high","low","vol"].forEach(k=>{ if(r[k] != null && r[k] > 0) s[k] = r[k]; });
+    if(Array.isArray(s.spark) && s.spark.length) s.spark[s.spark.length-1] = s.price;
+    n++;
+  });
+  if(q.index && q.index.value){
+    INDEX = Object.assign({}, INDEX, {
+      value:q.index.value, prevClose:q.index.prevClose, chg:q.index.chg,
+      chgPct:q.index.chgPct, time:q.index.time
+    });
+  }
+  return n;
+}
+
+function paintMeta(merged){
+  const eff = QUOTES_META || DATA_META || {};
+  const badge = document.getElementById("dataBadge");
+  if(badge) badge.textContent = (eff.session || "即時") + " " + fmtUpdated(eff.updated);
+  const note = document.getElementById("refreshNote");
+  if(note){
+    const t = fmtUpdated(eff.updated);
+    note.innerHTML = QUOTES_META
+      ? `報價時間 <b>${t}</b>（${eff.session || ""}）${merged ? `　已套用即時價 ${merged} 檔` : ""}　盤中每 5 分鐘自動更新；按右上「🔄 更新報價」可馬上抓最新一份。`
+      : `資料時間 <b>${t}</b>（${eff.session || ""}）　按右上「🔄 更新報價」抓最新一份。`;
+  }
+  const src = document.getElementById("srcLine");
+  if(src) src.innerHTML = `資料來源：證交所 MIS（即時價）＋ Yahoo Finance（日線、均線）＋ 證交所（三大法人）。最後更新：<b>${eff.updated || "—"}</b>（${eff.session || ""}）`;
+}
+
+function applyData(d, q){
+  DATA_META = {updated:d.updated, session:d.session};
+  DB = d.stocks;
+  if(d.index){ INDEX = d.index; if(Array.isArray(d.index.series) && d.index.series.length) indexSeries = d.index.series; }
+  if(Array.isArray(d.legal) && d.legal.length) LEGAL = d.legal;
+  const hasQ = !!(q && q.quotes && Object.keys(q.quotes).length);
+  QUOTES_META = hasQ ? {updated:q.updated, session:q.session} : null;
+  const merged = mergeQuotes(hasQ ? q : null);
+  renderIdx(); renderSummary(); renderStocks(); renderRanks(); renderLegal(); renderTradeLog();
+  paintMeta(merged);
+}
+
+/* 重畫前記住展開中的股票、正在填的欄位，畫完還原（不然按更新會把輸入清掉） */
+function captureUI(){
+  const open = [...document.querySelectorAll(".stock.open")].map(el=>el.id.replace("s-",""));
+  const forms = {}, calcs = {};
+  document.querySelectorAll(".trades .tr-form").forEach(f=>{
+    const c = f.dataset.code; if(!c) return;
+    const val = sel => { const e = f.querySelector(sel); return e ? e.value : ""; };
+    forms[c] = {side:val(".trSide") || "buy", price:val(".trPrice"), lots:val(".trLots"), at:val(".trAt")};
+  });
+  document.querySelectorAll(".stock").forEach(el=>{
+    const btn = el.querySelector(".calcBtn");
+    const inp = el.querySelector(".calcPrice");
+    if(btn && inp && inp.value) calcs[btn.dataset.code] = inp.value;
+  });
+  const sp = document.getElementById("search");
+  return {open, forms, calcs, search: sp ? sp.value : ""};
+}
+function restoreUI(keep){
+  if(!keep) return;
+  keep.open.forEach(i=>{ const el = document.getElementById("s-"+i); if(el) el.classList.add("open"); });
+  document.querySelectorAll(".trades .tr-form").forEach(f=>{
+    const v = keep.forms[f.dataset.code]; if(!v) return;
+    const set = (sel, val)=>{ const e = f.querySelector(sel); if(e) e.value = val; };
+    set(".trSide", v.side); set(".trPrice", v.price); set(".trLots", v.lots); set(".trAt", v.at);
+  });
+  document.querySelectorAll(".stock").forEach(el=>{
+    const btn = el.querySelector(".calcBtn"), inp = el.querySelector(".calcPrice");
+    if(!btn || !inp) return;
+    const v = keep.calcs[btn.dataset.code];
+    if(v != null) inp.value = v;
+  });
+  const sp = document.getElementById("search");
+  if(sp && keep.search) sp.value = keep.search;
+}
+
+function flash(msg, bad){
+  let el = document.getElementById("toast");
+  if(!el){ el = document.createElement("div"); el.id = "toast"; document.body.appendChild(el); }
+  el.className = "toast" + (bad ? " bad" : "") + " show";
+  el.textContent = msg;
+  clearTimeout(flash._t);
+  flash._t = setTimeout(()=>{ el.className = "toast" + (bad ? " bad" : ""); }, 2800);
+}
+
+async function loadQuotes(){
+  const bust = "?v=" + Date.now();
+  const [dr, qr] = await Promise.all([
+    fetch("data.json" + bust, {cache:"no-store"}),
+    fetch("quotes.json" + bust, {cache:"no-store"}).catch(()=>null)
+  ]);
+  if(!dr.ok) throw new Error("HTTP " + dr.status);
+  const d = await dr.json();
+  if(!Array.isArray(d.stocks) || !d.stocks.length) throw new Error("資料是空的");
+  let q = null;
+  if(qr && qr.ok){ try{ q = await qr.json(); }catch(e){} }
+  return {d, q};
+}
+
+/* 按鈕：馬上抓最新一份。silent=true 時是背景自動更新，不打擾使用者 */
+async function refreshQuotes(opts){
+  const silent = !!(opts && opts.silent);
+  const btn = document.getElementById("refreshBtn");
+  if(btn && !silent){
+    btn.disabled = true;
+    if(!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.textContent = "更新中…";
+  }
+  const keep = captureUI();
+  try{
+    const {d, q} = await loadQuotes();
+    applyData(d, q);
+    restoreUI(keep);
+    if(!silent) flash("已更新，報價時間 " + fmtUpdated((q || d).updated));
+  }catch(e){
+    console.warn("更新失敗：", e.message);
+    if(!silent) flash("這次抓不到最新資料（" + e.message + "），先沿用現在的數字。", true);
+  }finally{
+    if(btn && !silent){ btn.disabled = false; btn.textContent = btn.dataset.label || "🔄 更新報價"; }
+  }
+}
+
+/* 開頁先載一次 */
 (async function loadLive(){
   try{
-    const res = await fetch("data.json", {cache:"no-store"});
-    if(!res.ok) throw new Error("HTTP " + res.status);
-    const d = await res.json();
-    if(Array.isArray(d.stocks) && d.stocks.length){
-      DB = d.stocks;
-      if(d.index){ INDEX = d.index; if(Array.isArray(d.index.series) && d.index.series.length) indexSeries = d.index.series; }
-      if(Array.isArray(d.legal) && d.legal.length) LEGAL = d.legal;
-      renderIdx(); renderSummary(); renderStocks(); renderRanks(); renderLegal(); renderTradeLog();
-      const badge = document.getElementById("dataBadge");
-      if(badge) badge.textContent = (d.session || "即時") + " " + String(d.updated || "").slice(-5);
-      const src = document.getElementById("srcLine");
-      if(src) src.innerHTML = `資料來源：Yahoo Finance（即時價與近一年日線）＋ 證交所（三大法人）。最後更新：<b>${d.updated || "—"}</b>（${d.session || ""}）`;
-    }
+    const {d, q} = await loadQuotes();
+    applyData(d, q);
   }catch(e){
-    console.warn("無法載入 data.json，沿用示範數據：", e.message);
+    console.warn("無法載入行情，沿用示範數據：", e.message);
     const badge = document.getElementById("dataBadge");
     if(badge) badge.textContent = "示範數據（未連線）";
+    const note = document.getElementById("refreshNote");
+    if(note) note.textContent = "現在顯示的是示範數據：連不到行情檔，按右上「🔄 更新報價」再試一次。";
     const src = document.getElementById("srcLine");
     if(src) src.textContent = "目前顯示示範數據（無法連到 data.json，需透過網站開啟才會抓真實行情）。";
   }
 })();
+
+document.getElementById("refreshBtn").addEventListener("click", ()=>refreshQuotes());
+setInterval(()=>{ if(document.visibilityState === "visible") refreshQuotes({silent:true}); }, AUTO_MS);
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState === "visible") refreshQuotes({silent:true});
+});
 </script>
 </body>
 </html>
