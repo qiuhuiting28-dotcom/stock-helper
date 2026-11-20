@@ -291,7 +291,7 @@
 
   <div class="card">
     <h2 class="sec">今日漲跌排行</h2>
-    <p class="sec-desc">依資料庫裡的股票排出漲最多與跌最多（示範）</p>
+    <p class="sec-desc">依目前載入的行情排出漲最多與跌最多</p>
     <div class="rank-cols">
       <div id="top-up"></div>
       <div id="top-down"></div>
@@ -310,6 +310,8 @@
 <script>
 "use strict";
 const K = "taiwan-stock-v2";
+let LIVE_OK = false;      // 是否已載入真實行情（false 才在畫面上標「示範」）
+let BASE_SERIES = null;   // data.json 的 30 日指數序列
 
 let INDEX = { value:22734.58, prevClose:22590.22, chg:144.36, chgPct:0.64, volume:"3,842 億", time:"13:30 收盤" };
 let indexSeries = [
@@ -761,7 +763,7 @@ function renderSummary(){
 
 function renderIdx(){
   const i = INDEX, up = i.chg>=0, c = dirClass(i.chg), b = dirBg(i.chg);
-  document.getElementById("idx-time").textContent = `更新時間：${i.time}（示範）`;
+  document.getElementById("idx-time").textContent = `更新時間：${i.time}${LIVE_OK ? "" : "（示範）"}`;
   document.getElementById("idx").innerHTML = `
     <div><div class="big ${c}">${fmt(i.value)}</div><div class="meta">加權指數</div></div>
     <div>
@@ -1069,6 +1071,19 @@ function mergeQuotes(q){
       value:q.index.value, prevClose:q.index.prevClose, chg:q.index.chg,
       chgPct:q.index.chgPct, time:q.index.time
     });
+    if(BASE_SERIES && BASE_SERIES.length){
+      const ser = BASE_SERIES.slice();
+      const last = ser[ser.length-1];
+      if(Math.abs(last - q.index.value) < 0.05){
+        /* 同一天：data.json 已經是最新的收盤 */
+      }else if(q.index.prevClose && Math.abs(last - q.index.prevClose) < 0.05){
+        ser.push(q.index.value);            /* 跨到新的一天：接在後面 */
+        if(ser.length > 30) ser.shift();
+      }else{
+        ser[ser.length-1] = q.index.value;  /* 同一根 K 還在跳動：改最後一點 */
+      }
+      indexSeries = ser;
+    }
   }
   return n;
 }
@@ -1091,7 +1106,14 @@ function paintMeta(merged){
 function applyData(d, q){
   DATA_META = {updated:d.updated, session:d.session};
   DB = d.stocks;
-  if(d.index){ INDEX = d.index; if(Array.isArray(d.index.series) && d.index.series.length) indexSeries = d.index.series; }
+  if(d.index){
+    INDEX = d.index;
+    if(Array.isArray(d.index.series) && d.index.series.length){
+      BASE_SERIES = d.index.series.slice();
+      indexSeries = BASE_SERIES.slice();
+    }
+  }
+  LIVE_OK = true;
   if(Array.isArray(d.legal) && d.legal.length) LEGAL = d.legal;
   const hasQ = !!(q && q.quotes && Object.keys(q.quotes).length);
   QUOTES_META = hasQ ? {updated:q.updated, session:q.session} : null;
